@@ -357,6 +357,7 @@ mod test {
         let reduced_volume = (moles[0] + moles[1]) / reduced_density;
 
         let p = test_parameters_mixture(
+            arr1(&[1.0, 1.0]),
             arr1(&[12.0, 12.0]),
             arr1(&[6.0, 6.0]),
             arr1(&[1.0, 1.0]),
@@ -422,6 +423,7 @@ mod test {
         let density = 0.10000000000000001;
         let volume = 1.0 / density;
         let p = test_parameters_mixture(
+            arr1(&[1.0, 1.0]),
             arr1(&[12.0, 12.0]),
             arr1(&[6.0, 6.0]),
             arr1(&[1.0, 2.0]),

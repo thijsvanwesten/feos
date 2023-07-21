@@ -293,7 +293,7 @@ mod test {
     use approx::assert_relative_eq;
     #[test]
     fn test_wca_diameter() {
-        let p = test_parameters(24.0, 6.0, 2.0, 1.0);
+        let p = test_parameters(1.0, 24.0, 6.0, 2.0, 1.0);
         let temp = 4.0;
         assert_eq!(diameter_wca(&p, temp)[0] / p.sigma[0], 0.9614325601663462);
 
@@ -330,6 +330,7 @@ mod test {
         let reduced_volume = (moles[0] + moles[1]) / reduced_density;
 
         let p = test_parameters_mixture(
+            arr1(&[1.0, 1.0]),
             arr1(&[12.0, 12.0]),
             arr1(&[6.0, 6.0]),
             arr1(&[1.0, 1.0]),

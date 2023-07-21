@@ -18,15 +18,14 @@ struct PyNoRecord(NoRecord);
 
 /// Create a set of UV Theory parameters from records.
 #[pyclass(name = "UVRecord")]
-#[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
 #[derive(Clone)]
 pub struct PyUVRecord(UVRecord);
 
 #[pymethods]
 impl PyUVRecord {
     #[new]
-    fn new(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
-        Self(UVRecord::new(rep, att, sigma, epsilon_k))
+    fn new(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
+        Self(UVRecord::new(m, rep, att, sigma, epsilon_k))
     }
 
     fn __repr__(&self) -> PyResult<String> {
@@ -66,6 +65,8 @@ impl PyUVParameters {
     ///
     /// Parameters
     /// ----------
+    /// m : List[float]
+    ///     chain length (number of segments)
     /// rep : List[float]
     ///     repulsive exponents
     /// att : List[float]
@@ -81,6 +82,7 @@ impl PyUVParameters {
     #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
     #[staticmethod]
     fn from_lists(
+        m: Vec<f64>,
         rep: Vec<f64>,
         att: Vec<f64>,
         sigma: Vec<f64>,
@@ -97,7 +99,7 @@ impl PyUVParameters {
                     None,
                     None,
                 );
-                let model_record = UVRecord::new(rep[i], att[i], sigma[i], epsilon_k[i]);
+                let model_record = UVRecord::new(m[i], rep[i], att[i], sigma[i], epsilon_k[i]);
                 PureRecord::new(identifier, 1.0, model_record)
             })
             .collect();
@@ -111,6 +113,8 @@ impl PyUVParameters {
     ///
     /// Parameters
     /// ----------
+    /// m : float
+    ///     chain length (number of segments)
     /// rep : float
     ///     repulsive exponents
     /// att : float
@@ -129,10 +133,10 @@ impl PyUVParameters {
     /// Molar weight is one. No ideal gas contribution is considered.
     #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
     #[staticmethod]
-    fn new_simple(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> PyResult<Self> {
-        Ok(Self(Arc::new(UVParameters::new_simple(
-            rep, att, sigma, epsilon_k,
-        )?)))
+    fn new_simple(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
+        Self(Arc::new(UVParameters::new_simple(
+            m, rep, att, sigma, epsilon_k,
+        )))
     }
 }
 

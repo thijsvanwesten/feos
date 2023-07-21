@@ -66,6 +66,16 @@ impl<E: Residual> State<E> {
         self.get_or_compute_derivative_residual(PartialDerivative::Zeroth)
     }
 
+    pub fn residual_helmholtz_energy_contributions(&self) -> Vec<(String, SINumber)> {
+        let new_state = self.derive0();
+        let contributions = self.eos.evaluate_residual_contributions(&new_state);
+        let mut res = Vec::with_capacity(contributions.len());
+        for (s, v) in contributions {
+            res.push((s, v * new_state.temperature * SIUnit::reference_energy()));
+        }
+        res
+    }
+
     /// Residual entropy $S^\text{res}=\left(\frac{\partial A^\text{res}}{\partial T}\right)_{V,N_i}$
     pub fn residual_entropy(&self) -> SINumber {
         -self.get_or_compute_derivative_residual(PartialDerivative::First(DT))
