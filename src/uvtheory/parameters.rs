@@ -226,6 +226,26 @@ impl UVParameters {
         let pure_record = PureRecord::new(Identifier::default(), 1.0, model_record);
         Self::new_pure(pure_record).unwrap()
     }
+    /// Parameters for a binary mixture with molar weight one and no (default) ideal gas contributions.
+    pub fn new_simple_binary(
+        m: Array1<f64>,
+        rep: Array1<f64>,
+        att: Array1<f64>,
+        sigma: Array1<f64>,
+        epsilon: Array1<f64>,
+    ) -> Self {
+        let identifier = Identifier::new(Some("1"), None, None, None, None, None);
+        //let n = u_frac_params[[0..]].len();
+
+        let model_record = UVRecord::new(m[0], rep[0], att[0], sigma[0], epsilon[0]);
+        let pr1 = PureRecord::new(identifier, 1.0, model_record);
+        //
+        let identifier2 = Identifier::new(Some("1"), None, None, None, None, None);
+        let model_record2 = UVRecord::new(m[1], rep[1], att[1], sigma[1], epsilon[1]);
+        let pr2 = PureRecord::new(identifier2, 1.0, model_record2);
+        let pure_records = vec![pr1, pr2];
+        UVParameters::new_binary(pure_records, None).unwrap()
+    }
 
     /// Markdown representation of parameters.
     pub fn to_markdown(&self) -> String {

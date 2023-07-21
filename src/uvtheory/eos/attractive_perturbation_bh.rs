@@ -1,5 +1,6 @@
 //use super::attractive_perturbation_wca::one_fluid_properties;
 use super::hard_sphere_bh::diameter_bh;
+use crate::uvtheory::eos::CombinationRule;
 use crate::uvtheory::parameters::*;
 use feos_core::{HelmholtzEnergyDual, StateHD};
 use ndarray::{Array1, Array2};
@@ -70,6 +71,7 @@ const NU: f64 = 0.25;
 #[derive(Debug, Clone)]
 pub struct AttractivePerturbationBH {
     pub parameters: Arc<UVParameters>,
+    pub combination_rule: CombinationRule,
 }
 
 impl fmt::Display for AttractivePerturbationBH {
@@ -165,34 +167,47 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
         for i in 0..n {
             let xi = x[i];
             let mi = p.m[i];
+
+            let ufraction_i = u_fraction_bh_chain(
+                D::one() * mi,
+                density * mi * p.sigma[i].powi(3),
+                t.recip() * p.epsilon_k[i],
+            );
+
             for j in 0..n {
                 let alpha_ij = mean_field_constant_f64(p.rep_ij[[i, j]], p.att_ij[[i, j]], 1.0);
 
-                //  use either one-fluid chain length or mij
+                let ufraction_j = u_fraction_bh_chain(
+                    D::one() * p.m[j],
+                    density * p.m[j] * p.sigma[j].powi(3),
+                    t.recip() * p.epsilon_k[j],
+                );
+
                 let m_ij: D = one_fluid.m;
                 //  let m_ij = D::one() * 0.5 * (mi + p.m[j]);
 
-                // A. one-fluid like u-fraction
-                let phi_u = u_fraction_bh_chain(
-                    m_ij,
-                    one_fluid.reduced_segment_density,
-                    one_fluid.reduced_temperature.recip(),
-                );
-
-                //  // B. mixing rule for u-fraction
-                //  let phi_ii = u_fraction_bh_chain(
-                //      D::one() * mi,
-                //      density * mi * p.sigma_ij[[i, i]].powi(3),
-                //      t.recip() * p.eps_k_ij[[i, i]],
-                //  );
-                //  let phi_jj = u_fraction_bh_chain(
-                //      D::one() * p.m[j],
-                //      density * p.m[j] * p.sigma_ij[[j, j]].powi(3),
-                //      t.recip() * p.eps_k_ij[[j, j]],
-                //  );
-                //  let phi_u = (phi_ii + phi_jj) * 0.5;
-                //  //  let phi_u = (phi_ii * phi_jj).sqrt();
-                //  //  let phi_u = ((-phi_ii + 1.0) * (-phi_jj + 1.0)) * 0.5 + 1.0;
+                let psi_ij = match self.combination_rule {
+                    CombinationRule::ArithmeticPhi => {
+                        let ufraction_ij = (ufraction_i + ufraction_j) * 0.5;
+                        -ufraction_ij + 1.0
+                    }
+                    CombinationRule::GeometricPhi => {
+                        let ufraction_ij = (ufraction_i * ufraction_j).sqrt();
+                        -ufraction_ij + 1.0
+                    }
+                    CombinationRule::GeometricPsi => {
+                        ((-ufraction_i + 1.0) * (-ufraction_j + 1.0)).sqrt()
+                    }
+                    // A. one-fluid like u-fraction
+                    CombinationRule::OneFluidPsi => {
+                        let ufraction_x = u_fraction_bh_chain(
+                            one_fluid.m,
+                            one_fluid.reduced_segment_density,
+                            one_fluid.reduced_temperature.recip(),
+                        );
+                        -ufraction_x + 1.0
+                    }
+                };
 
                 // Intramolecular part
                 if i == j {
@@ -218,7 +233,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
                         * p.sigma_ij[[i, i]].powi(3)
                         * i_intra_ii_ldl;
 
-                    virial -= xi * (-phi_u + 1.0) * b21u_intra;
+                    virial -= xi * (-ufraction_i + 1.0) * b21u_intra;
                     //   dbg!(&phi_u);
                     //   dbg!(&i_intra_ij_ldl);
                     //   dbg!(&b2u1_intra);
@@ -258,7 +273,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
                     * 2.0
                     * PI;
 
-                virial += xi * x[j] * (-phi_u + 1.0) * (delta_b2 - b21u_inter);
+                virial += xi * x[j] * psi_ij * (delta_b2 - b21u_inter);
 
                 //  dbg!(&i_inter_ij_ldl);
                 //  dbg!(&virial);
@@ -589,6 +604,7 @@ fn coefficients_bh<D: DualNum<f64> + Copy>(rep: f64, att: f64, d: D) -> [D; 3] {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::uvtheory::eos::CombinationRule;
     use crate::uvtheory::parameters::utils::test_parameters;
     use approx::assert_relative_eq;
     use ndarray::arr1;
@@ -624,6 +640,7 @@ mod test {
         let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0);
         let pt = AttractivePerturbationBH {
             parameters: Arc::new(p.clone()),
+            combination_rule: CombinationRule::OneFluidPsi,
         };
         let state = StateHD::new(
             reduced_temperature * p.epsilon_k[0],

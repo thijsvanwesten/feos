@@ -1,10 +1,11 @@
 use super::parameters::{NoRecord, UVBinaryRecord, UVParameters, UVRecord};
-use super::{Perturbation, VirialOrder};
+use super::{CombinationRule, Perturbation, VirialOrder};
 use feos_core::parameter::{
     BinaryRecord, Identifier, IdentifierOption, Parameter, ParameterError, PureRecord,
 };
 use feos_core::python::parameter::*;
 use feos_core::*;
+use ndarray::{arr1, arr2};
 use numpy::{PyArray2, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -79,7 +80,7 @@ impl PyUVParameters {
     /// Returns
     /// -------
     /// UVParameters
-    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+    #[pyo3(text_signature = "(m, rep, att, sigma, epsilon_k)")]
     #[staticmethod]
     fn from_lists(
         m: Vec<f64>,
@@ -138,6 +139,46 @@ impl PyUVParameters {
             m, rep, att, sigma, epsilon_k,
         )))
     }
+
+    /// Create UV Theory parameters for pure substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m : Array
+    ///     chain length (number of segments)
+    /// rep : Array
+    ///     repulsive exponents
+    /// att : Array
+    ///     attractive exponents
+    /// sigma : Array
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : Array
+    ///     Mie energy parameter in units of Kelvin
+    ///
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+    #[staticmethod]
+    fn new_simple_binary(
+        m: Vec<f64>,
+        rep: Vec<f64>,
+        att: Vec<f64>,
+        sigma: Vec<f64>,
+        epsilon_k: Vec<f64>,
+    ) -> Self {
+        Self(Arc::new(UVParameters::new_simple_binary(
+            arr1(&[m[0], m[1]]),
+            arr1(&[rep[0], rep[1]]),
+            arr1(&[att[0], att[1]]),
+            arr1(&[sigma[0], sigma[1]]),
+            arr1(&[epsilon_k[0], epsilon_k[1]]),
+        )))
+    }
 }
 
 impl_pure_record!(UVRecord, PyUVRecord);
@@ -151,6 +192,7 @@ pub fn uvtheory(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<Perturbation>()?;
     m.add_class::<VirialOrder>()?;
+    m.add_class::<CombinationRule>()?;
     m.add_class::<PyUVRecord>()?;
     m.add_class::<PyPureRecord>()?;
     m.add_class::<PyBinaryRecord>()?;

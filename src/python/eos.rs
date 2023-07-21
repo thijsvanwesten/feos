@@ -24,7 +24,7 @@ use crate::saftvrqmie::{SaftVRQMie, SaftVRQMieOptions};
 #[cfg(feature = "uvtheory")]
 use crate::uvtheory::python::PyUVParameters;
 #[cfg(feature = "uvtheory")]
-use crate::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, VirialOrder};
+use crate::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, VirialOrder, CombinationRule};
 
 use feos_core::cubic::PengRobinson;
 use feos_core::joback::Joback;
@@ -217,6 +217,7 @@ impl PyEquationOfState {
     /// virial_order : VirialOrder, optional
     ///     Highest order of virial coefficient to consider.
     ///     Defaults to second order (original uv-theory).
+    /// combination_rule : CombinationRule, optional
     ///
     /// Returns
     /// -------
@@ -226,19 +227,21 @@ impl PyEquationOfState {
     #[cfg(feature = "uvtheory")]
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second),    
-        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order)"
+        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi),    
+        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule)"
     )]
     fn uvtheory(
         parameters: PyUVParameters,
         max_eta: f64,
         perturbation: Perturbation,
         virial_order: VirialOrder,
+        combination_rule: CombinationRule,
     ) -> PyResult<Self> {
         let options = UVTheoryOptions {
             max_eta,
             perturbation,
             virial_order,
+            combination_rule,
         };
         let residual = Arc::new(ResidualModel::UVTheory(UVTheory::with_options(
             parameters.0,

@@ -31,6 +31,16 @@ use reference_perturbation_bh::ReferencePerturbationBH;
 use reference_perturbation_uvb3::ReferencePerturbationUVB3;
 use reference_perturbation_wca::ReferencePerturbationWCA;
 
+/// Type of Combination Rule.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", pyo3::pyclass)]
+pub enum CombinationRule {
+    ArithmeticPhi,
+    GeometricPhi,
+    GeometricPsi,
+    OneFluidPsi,
+}
+
 /// Type of perturbation.
 #[derive(Clone)]
 #[cfg_attr(feature = "python", pyo3::pyclass)]
@@ -53,6 +63,7 @@ pub struct UVTheoryOptions {
     pub max_eta: f64,
     pub perturbation: Perturbation,
     pub virial_order: VirialOrder,
+    pub combination_rule: CombinationRule,
 }
 
 impl Default for UVTheoryOptions {
@@ -61,6 +72,7 @@ impl Default for UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::ArithmeticPhi,
         }
     }
 }
@@ -96,6 +108,7 @@ impl UVTheory {
                     }));
                     contributions.push(Box::new(AttractivePerturbationBH {
                         parameters: parameters.clone(),
+                        combination_rule: options.combination_rule.clone(),
                     }));
                     if parameters.m.iter().any(|&mi| mi > 1.0) {
                         contributions.push(Box::new(ChainBhTptv {
@@ -201,11 +214,12 @@ mod test {
 
     #[test]
     fn helmholtz_energy_pure_bh_contributions() -> EosResult<()> {
-        let p = test_parameters(8.0, 12.0, 6.0, 1.5, 1.5);
+        let p = test_parameters(1.0, 12.0, 6.0, 1.5, 1.5);
         let options = UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::OneFluidPsi,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -255,6 +269,7 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::OneFluidPsi,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -323,6 +338,7 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::OneFluidPsi,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -352,6 +368,7 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Third,
+            combination_rule: CombinationRule::OneFluidPsi,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -406,6 +423,7 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::ArithmeticPhi,
         };
 
         let eos_bh = Arc::new(UVTheory::with_options(Arc::new(uv_parameters), options)?);
