@@ -28,23 +28,21 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationBH 
         let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let eta_a = packing_fraction_a(p, &d, eta);
         let eta_b = packing_fraction_b(p, &d, eta);
-        let mbar = (&state.molefracs * &self.parameters.m).sum();
         let mut a = D::zero();
         for i in 0..n {
             for j in 0..n {
-                let d_ij = (d[i] + d[j]) * 0.5; // (d[i] * p.sigma[i] + d[j] * p.sigma[j]) * 0.5;
-                a += x[i]
-                    * x[j]
-                    * p.m[i]
-                    * p.m[j]
-                    * (((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3))
-                        - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3)))
-                    * (-d_ij.powi(3) + p.sigma_ij[[i, j]].powi(3))
+                let d_ij = (d[i] + d[j]) * 0.5;
+                let i0_ij: D = (((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3))
+                    - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3)))
+                    * (-d_ij.powi(3) / p.sigma_ij[[i, j]].powi(3) + 1.0)
                     / (2.0 - 2.0 / (p.m[i] + p.m[j]))
+                    / 3.0;
+
+                a += x[i] * x[j] * p.m[i] * p.m[j] * p.sigma_ij[[i, j]].powi(3) * i0_ij;
             }
         }
 
-        -a * state.moles.sum().powi(2) * 2.0 / 3.0 / state.volume * PI //* mbar
+        -a * state.moles.sum().powi(2) * 2.0 / state.volume * PI
     }
 }
 

@@ -211,32 +211,35 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
 
                 // Intramolecular part
                 if i == j {
-                    let (i_intra_ij, i_intra_ii_ldl) = intramolecular_correlation_integral_and_ldl(
-                        one_fluid.reduced_segment_density,
-                        m_ij,
-                        p.rep_ij[[i, j]],
-                        p.att_ij[[i, j]],
-                    );
+                    if mi > 2.0 {
+                        let (i_intra_ij, i_intra_ii_ldl) =
+                            intramolecular_correlation_integral_and_ldl(
+                                one_fluid.reduced_segment_density,
+                                m_ij,
+                                p.rep_ij[[i, j]],
+                                p.att_ij[[i, j]],
+                            );
 
-                    delta_a1u += xi
-                        * mi
-                        * mi
-                        * p.sigma_ij[[i, i]].powi(3)
-                        * p.eps_k_ij[[i, i]]
-                        * i_intra_ij
-                        * 0.5
-                        / PI;
+                        delta_a1u += xi
+                            * mi
+                            * mi
+                            * p.sigma_ij[[i, i]].powi(3)
+                            * p.eps_k_ij[[i, i]]
+                            * i_intra_ij
+                            * 0.5
+                            / PI;
 
-                    let b21u_intra = (t.recip() * p.eps_k_ij[[i, i]])
-                        * mi
-                        * mi
-                        * p.sigma_ij[[i, i]].powi(3)
-                        * i_intra_ii_ldl;
+                        let b21u_intra = (t.recip() * p.eps_k_ij[[i, i]])
+                            * mi
+                            * mi
+                            * p.sigma_ij[[i, i]].powi(3)
+                            * i_intra_ii_ldl;
 
-                    virial -= xi * (-ufraction_i + 1.0) * b21u_intra;
-                    //   dbg!(&phi_u);
-                    //   dbg!(&i_intra_ij_ldl);
-                    //   dbg!(&b2u1_intra);
+                        virial -= xi * (-ufraction_i + 1.0) * b21u_intra;
+                        //   dbg!(&phi_u);
+                        //   dbg!(&i_intra_ij_ldl);
+                        //   dbg!(&b2u1_intra);
+                    }
                 }
 
                 // Intermolecular part

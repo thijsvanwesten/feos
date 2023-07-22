@@ -112,8 +112,7 @@ pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
 ) -> Array2<D> {
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau =
-            -(diameter[i] / parameters.sigma[i] + diameter[j] / parameters.sigma[j]) * 0.5 + 1.0; //dimensionless
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + 1.0; //dimensionless
         let tau2 = tau * tau;
 
         let c = arr1(&[
@@ -132,8 +131,7 @@ pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
 ) -> Array2<D> {
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau =
-            -(diameter[i] / parameters.sigma[i] + diameter[j] / parameters.sigma[j]) * 0.5 + 1.0;
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + 1.0; //dimensionless
         let tau2 = tau * tau;
         let rep_inv = 1.0 / parameters.rep_ij[[i, j]];
 
