@@ -235,7 +235,18 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
                             * p.sigma_ij[[i, i]].powi(3)
                             * i_intra_ii_ldl;
 
-                        virial -= xi * (-ufraction_i + 1.0) * b21u_intra;
+                        match self.combination_rule {
+                            CombinationRule::OneFluidPsi => {
+                                let psi_x_intra = -u_fraction_bh_chain(
+                                    D::one() * mi,
+                                    one_fluid.reduced_segment_density,
+                                    one_fluid.reduced_temperature.recip(),
+                                ) + 1.0;
+                                virial -= xi * psi_x_intra * b21u_intra
+                            } // One fluid combining rule
+                            _ => virial -= xi * (-ufraction_i + 1.0) * b21u_intra, //all other cases
+                        };
+
                         //   dbg!(&phi_u);
                         //   dbg!(&i_intra_ij_ldl);
                         //   dbg!(&b2u1_intra);
