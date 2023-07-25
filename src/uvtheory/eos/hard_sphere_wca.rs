@@ -159,23 +159,23 @@ pub(super) fn zeta_23<D: DualNum<f64> + Copy>(molefracs: &Array1<D>, diameter: &
     zeta[0] / zeta[1]
 }
 
-#[inline]
-pub(super) fn dimensionless_length_scale<D: DualNum<f64> + Copy>(
-    parameters: &UVParameters,
-    temperature: D,
-) -> Array1<D> {
-    parameters
-        .sigma
-        .iter()
-        .enumerate()
-        .map(|(i, _c)| {
-            let rs = (parameters.rep[i] / parameters.att[i])
-                .powf(1.0 / (parameters.rep[i] - parameters.att[i]));
-            -diameter_wca(parameters, temperature)[i] + rs * parameters.sigma[i]
-            // parameters.sigma[i]
-        })
-        .collect()
-}
+// #[inline]
+// pub(super) fn dimensionless_length_scale<D: DualNum<f64> + Copy>(
+//     parameters: &UVParameters,
+//     temperature: D,
+// ) -> Array1<D> {
+//     parameters
+//         .sigma
+//         .iter()
+//         .enumerate()
+//         .map(|(i, _c)| {
+//             let rs = (parameters.rep[i] / parameters.att[i])
+//                 .powf(1.0 / (parameters.rep[i] - parameters.att[i]));
+//             -diameter_wca(parameters, temperature)[i] + rs * parameters.sigma[i]
+//             // parameters.sigma[i]
+//         })
+//         .collect()
+// }
 
 #[inline]
 
@@ -185,11 +185,12 @@ pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
-    let dimensionless_lengths = dimensionless_length_scale(parameters, temperature);
+
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-            / parameters.sigma_ij[[i, j]]
-            * 0.5; //dimensionless
+        let diameter = diameter_wca(parameters, temperature); // with dimension
+        let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
+            .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
         let tau2 = tau * tau;
 
         let c = arr1(&[
@@ -207,11 +208,14 @@ pub(super) fn packing_fraction_b_uvb3<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
-    let dimensionless_lengths = dimensionless_length_scale(parameters, temperature);
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-            / parameters.sigma_ij[[i, j]]
-            * 0.5; //dimensionless
+        // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
+        //     / parameters.sigma_ij[[i, j]]
+        //     * 0.5; //dimensionless
+        let diameter = diameter_wca(parameters, temperature); // with dimension
+        let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
+            .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
         let tau2 = tau * tau;
 
         let c = arr1(&[
@@ -228,12 +232,15 @@ pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
     eta: D,
     temperature: D,
 ) -> Array2<D> {
-    let dimensionless_lengths = dimensionless_length_scale(parameters, temperature);
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-            / parameters.sigma_ij[[i, j]]
-            * 0.5; //dimensionless
+        // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
+        //     / parameters.sigma_ij[[i, j]]
+        //     * 0.5; //dimensionless
+        let diameter = diameter_wca(parameters, temperature); // with dimension
+        let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
+            .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
 
         let tau2 = tau * tau;
         let rep_inv = 1.0 / parameters.rep_ij[[i, j]];
@@ -257,12 +264,12 @@ pub(super) fn packing_fraction_a_uvb3<D: DualNum<f64> + Copy>(
     eta: D,
     temperature: D,
 ) -> Array2<D> {
-    let dimensionless_lengths = dimensionless_length_scale(parameters, temperature);
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-            / parameters.sigma_ij[[i, j]]
-            * 0.5; //dimensionless
+        let diameter = diameter_wca(parameters, temperature); // with dimension
+        let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
+            .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
 
         let tau2 = tau * tau;
         let rep_inv = 1.0 / parameters.rep_ij[[i, j]];
@@ -315,11 +322,11 @@ mod test {
             epsilon = 1e-8
         );
 
-        assert_relative_eq!(
-            dimensionless_length_scale(&p, 4.0 * p.epsilon_k[0])[0] / p.sigma[0],
-            0.11862717872596029,
-            epsilon = 1e-8
-        );
+        // assert_relative_eq!(
+        //     dimensionless_length_scale(&p, 4.0 * p.epsilon_k[0])[0] / p.sigma[0],
+        //     0.11862717872596029,
+        //     epsilon = 1e-8
+        // );
     }
 
     #[test]
