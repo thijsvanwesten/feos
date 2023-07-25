@@ -134,6 +134,7 @@ impl UVTheory {
                         }));
                         contributions.push(Box::new(AttractivePerturbationWCA {
                             parameters: parameters.clone(),
+                            combination_rule: options.combination_rule.clone(),
                         }));
                     }
                     VirialOrder::Third => {
