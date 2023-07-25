@@ -67,7 +67,7 @@ const C2: [[f64; 2]; 3] = [
     [0.0, 0.0],
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AttractivePerturbationWCA {
     pub parameters: Arc<UVParameters>,
     pub combination_rule: CombinationRule,

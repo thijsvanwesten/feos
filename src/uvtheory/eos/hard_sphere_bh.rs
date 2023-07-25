@@ -19,7 +19,7 @@ const BH_CONSTANTS_ETA_A: [[f64; 4]; 4] = [
     [0.0, 0.0, 0.0, 0.0],
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HardSphereBH {
     pub parameters: Arc<UVParameters>,
 }

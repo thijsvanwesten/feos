@@ -2,13 +2,13 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::parameters::UVParameters;
+use crate::association::Association;
 use feos_core::MolarWeight;
 use feos_core::{parameter::Parameter, Components, EosError, EosResult, HelmholtzEnergy, Residual};
 use ndarray::Array1;
 use quantity::si::*;
 use std::f64::consts::FRAC_PI_6;
 use std::sync::Arc;
-
 pub(crate) mod attractive_perturbation_bh;
 pub(crate) mod attractive_perturbation_uvb3;
 pub(crate) mod attractive_perturbation_wca;
@@ -64,6 +64,8 @@ pub struct UVTheoryOptions {
     pub perturbation: Perturbation,
     pub virial_order: VirialOrder,
     pub combination_rule: CombinationRule,
+    pub max_iter_cross_assoc: usize,
+    pub tol_cross_assoc: f64,
 }
 
 impl Default for UVTheoryOptions {
@@ -73,6 +75,8 @@ impl Default for UVTheoryOptions {
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::ArithmeticPhi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         }
     }
 }
@@ -160,6 +164,14 @@ impl UVTheory {
                 }
             }
         }
+        if !parameters.association.is_empty() {
+            contributions.push(Box::new(Association::new(
+                &parameters,
+                &parameters.association,
+                options.max_iter_cross_assoc,
+                options.tol_cross_assoc,
+            )));
+        };
 
         Ok(Self {
             parameters,
@@ -221,6 +233,8 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -271,6 +285,8 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -340,6 +356,8 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -370,6 +388,8 @@ mod test {
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Third,
             combination_rule: CombinationRule::OneFluidPsi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -395,13 +415,13 @@ mod test {
         let rep1 = 24.0;
         let eps_k1 = 150.03;
         let sig1 = 3.7039;
-        let r1 = UVRecord::new(1.0, rep1, 6.0, sig1, eps_k1);
+        let r1 = UVRecord::new(1.0, rep1, 6.0, sig1, eps_k1, None, None, None, None, None);
         let i = Identifier::new(None, None, None, None, None, None);
         // compontent 2
         let rep2 = 24.0;
         let eps_k2 = 150.03;
         let sig2 = 3.7039;
-        let r2 = UVRecord::new(1.0, rep2, 6.0, sig2, eps_k2);
+        let r2 = UVRecord::new(1.0, rep2, 6.0, sig2, eps_k2, None, None, None, None, None);
         let j = Identifier::new(None, None, None, None, None, None);
         //////////////
 
@@ -425,6 +445,8 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::ArithmeticPhi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
 
         let eos_bh = Arc::new(UVTheory::with_options(Arc::new(uv_parameters), options)?);

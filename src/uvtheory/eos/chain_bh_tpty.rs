@@ -17,7 +17,7 @@ const BH_DIAMETER: [f64; 8] = [
     -0.147289922797747,
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChainBH {
     pub parameters: Arc<UVParameters>,
 }
@@ -262,12 +262,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
             ],
             None,
@@ -309,12 +309,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0, None, None, None, None, None),
                 ),
             ],
             None,
@@ -356,12 +356,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0, None, None, None, None, None),
                 ),
             ],
             None,

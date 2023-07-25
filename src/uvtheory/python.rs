@@ -25,8 +25,30 @@ pub struct PyUVRecord(UVRecord);
 #[pymethods]
 impl PyUVRecord {
     #[new]
-    fn new(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
-        Self(UVRecord::new(m, rep, att, sigma, epsilon_k))
+    fn new(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        kappa_ab: Option<f64>,
+        epsilon_k_ab: Option<f64>,
+        na: Option<f64>,
+        nb: Option<f64>,
+        nc: Option<f64>,
+    ) -> Self {
+        Self(UVRecord::new(
+            m,
+            rep,
+            att,
+            sigma,
+            epsilon_k,
+            kappa_ab,
+            epsilon_k_ab,
+            na,
+            nb,
+            nc,
+        ))
     }
 
     fn __repr__(&self) -> PyResult<String> {
@@ -100,7 +122,18 @@ impl PyUVParameters {
                     None,
                     None,
                 );
-                let model_record = UVRecord::new(m[i], rep[i], att[i], sigma[i], epsilon_k[i]);
+                let model_record = UVRecord::new(
+                    m[i],
+                    rep[i],
+                    att[i],
+                    sigma[i],
+                    epsilon_k[i],
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
                 PureRecord::new(identifier, 1.0, model_record)
             })
             .collect();
@@ -177,6 +210,64 @@ impl PyUVParameters {
             arr1(&[att[0], att[1]]),
             arr1(&[sigma[0], sigma[1]]),
             arr1(&[epsilon_k[0], epsilon_k[1]]),
+        )))
+    }
+    /// Create UV Theory parameters for pure associating substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m : float
+    ///     chain length (number of segments)
+    /// rep : float
+    ///     repulsive exponents
+    /// att : float
+    ///     attractive exponents
+    /// sigma : float
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : float
+    ///     Mie energy parameter in units of Kelvin
+    ///kappa_ab : float
+    ///     Association parameter kappa_ab
+    ///epsilon_ab : float
+    ///     Association parameter epsilon_ab
+    ///
+    ///
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(
+        text_signature = "(m, rep, att, sigma, epsilon_k, kappa_ab, eps_k_ab, na, nb, nc, molar_weight)"
+    )]
+    #[staticmethod]
+    fn new_simple_assoc(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        kappa_ab: f64,
+        epsilon_k_ab: f64,
+        na: f64,
+        nb: f64,
+        nc: f64,
+        mw: f64,
+    ) -> Self {
+        Self(Arc::new(UVParameters::new_simple_assoc(
+            m,
+            rep,
+            att,
+            sigma,
+            epsilon_k,
+            kappa_ab,
+            epsilon_k_ab,
+            na,
+            nb,
+            nc,
+            mw,
         )))
     }
 }

@@ -204,7 +204,7 @@ impl PyEquationOfState {
         Self(Arc::new(EquationOfState::new(ideal_gas, residual)))
     }
 
-    /// UV-Theory equation of state.
+   /// UV-Theory equation of state.
     ///
     /// Parameters
     /// ----------
@@ -217,7 +217,11 @@ impl PyEquationOfState {
     /// virial_order : VirialOrder, optional
     ///     Highest order of virial coefficient to consider.
     ///     Defaults to second order (original uv-theory).
-    /// combination_rule : CombinationRule, optional
+    /// combination_rule: CombinationRule, optional
+    /// max_iter_cross_assoc : unsigned integer, optional
+    ///     Maximum number of iterations for cross association. Defaults to 50.
+    /// tol_cross_assoc : float
+    ///     Tolerance for convergence of cross association. Defaults to 1e-10.
     ///
     /// Returns
     /// -------
@@ -227,29 +231,35 @@ impl PyEquationOfState {
     #[cfg(feature = "uvtheory")]
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi),    
-        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule)"
+        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi, max_iter_cross_assoc=50, tol_cross_assoc=1e-10 ),    
+        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule, max_iter_cross_assoc, tol_cross_assoc)"
     )]
     fn uvtheory(
         parameters: PyUVParameters,
         max_eta: f64,
         perturbation: Perturbation,
         virial_order: VirialOrder,
-        combination_rule: CombinationRule,
+        combination_rule:CombinationRule,
+        max_iter_cross_assoc: usize,
+        tol_cross_assoc: f64,
     ) -> PyResult<Self> {
         let options = UVTheoryOptions {
             max_eta,
             perturbation,
             virial_order,
             combination_rule,
+            max_iter_cross_assoc,
+            tol_cross_assoc,
         };
         let residual = Arc::new(ResidualModel::UVTheory(UVTheory::with_options(
             parameters.0,
             options,
         )?));
         let ideal_gas = Arc::new(IdealGasModel::NoModel(residual.components()));
+
         Ok(Self(Arc::new(EquationOfState::new(ideal_gas, residual))))
     }
+
 
     /// SAFT-VRQ Mie equation of state.
     ///
