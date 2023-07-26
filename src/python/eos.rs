@@ -231,7 +231,7 @@ impl PyEquationOfState {
     #[cfg(feature = "uvtheory")]
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi, max_iter_cross_assoc=50, tol_cross_assoc=1e-10 ),    
+        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi, max_iter_cross_assoc=50, tol_cross_assoc=1e-10),    
         text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule, max_iter_cross_assoc, tol_cross_assoc)"
     )]
     fn uvtheory(
@@ -242,6 +242,7 @@ impl PyEquationOfState {
         combination_rule:CombinationRule,
         max_iter_cross_assoc: usize,
         tol_cross_assoc: f64,
+        //dq_variant: DQVariants,
     ) -> PyResult<Self> {
         let options = UVTheoryOptions {
             max_eta,
@@ -250,6 +251,7 @@ impl PyEquationOfState {
             combination_rule,
             max_iter_cross_assoc,
             tol_cross_assoc,
+            //dq_variant,
         };
         let residual = Arc::new(ResidualModel::UVTheory(UVTheory::with_options(
             parameters.0,
