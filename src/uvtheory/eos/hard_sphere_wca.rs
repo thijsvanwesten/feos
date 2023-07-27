@@ -185,9 +185,8 @@ pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
-
+    let diameter = diameter_wca(parameters, temperature); // with dimension
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let diameter = diameter_wca(parameters, temperature); // with dimension
         let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
             .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
@@ -208,11 +207,12 @@ pub(super) fn packing_fraction_b_uvb3<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
+    let diameter = diameter_wca(parameters, temperature); // with dimension
     Array2::from_shape_fn((n, n), |(i, j)| {
         // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
         //     / parameters.sigma_ij[[i, j]]
         //     * 0.5; //dimensionless
-        let diameter = diameter_wca(parameters, temperature); // with dimension
+
         let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
             .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
@@ -233,11 +233,12 @@ pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
+    let diameter = diameter_wca(parameters, temperature); // with dimension
     Array2::from_shape_fn((n, n), |(i, j)| {
         // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
         //     / parameters.sigma_ij[[i, j]]
         //     * 0.5; //dimensionless
-        let diameter = diameter_wca(parameters, temperature); // with dimension
+
         let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
             .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
@@ -265,8 +266,8 @@ pub(super) fn packing_fraction_a_uvb3<D: DualNum<f64> + Copy>(
     temperature: D,
 ) -> Array2<D> {
     let n = parameters.att.len();
+    let diameter = diameter_wca(parameters, temperature); // with dimension
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let diameter = diameter_wca(parameters, temperature); // with dimension
         let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
             .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
