@@ -170,7 +170,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
 
             let ufraction_i = u_fraction_bh_chain(
                 D::one() * mi,
-                density * mi * p.sigma[i].powi(3),
+                one_fluid.reduced_segment_density,
+                //density * mi * p.sigma[i].powi(3),
                 t.recip() * p.epsilon_k[i],
             );
 
@@ -179,7 +180,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationBH
 
                 let ufraction_j = u_fraction_bh_chain(
                     D::one() * p.m[j],
-                    density * p.m[j] * p.sigma[j].powi(3),
+                    one_fluid.reduced_segment_density,
+                    //density * p.m[j] * p.sigma[j].powi(3),
                     t.recip() * p.epsilon_k[j],
                 );
 
@@ -380,31 +382,51 @@ fn delta_b2_lj_chain<D: DualNum<f64> + Copy>(
     let prefac = t_recip.powi(3) * (1.0 / 3.0);
     let b_23 = prefac * c_mie * (a2 * m1 + a3 * m12 + a1);
 
-    let phi = (t_recip * 0.0208820673).tanh().powf(1.51646922);
-
+    // first fit (PPEPPD)
     let par = [
-        286.831547,
-        -449.394468,
-        237.934383,
-        0.0,
-        0.555105093,
-        3.32488055,
-        3.08699368,
-        0.0,
-        311.346254,
-        -495.057496,
-        185.343661,
-        29.9125809,
-        -0.314196403,
-        -5.07772512,
-        17.5503540,
-        -40.2150869,
+        2.08820673e-02,
+        1.51646922e+00,
+        2.86831547e+02,
+        5.55105093e-01,
+        3.11346254e+02,
+        -3.14196403e-01,
+        -4.49394468e+02,
+        3.32488055e+00,
+        -4.95057496e+02,
+        -5.07772512e+00,
+        2.37934383e+02,
+        3.08699368e+00,
+        1.85343661e+02,
+        1.75503540e+01,
+        2.99125809e+01,
+        -4.02150869e+01,
     ];
 
-    let a0 = m1 * par[1] + m12 * par[2] + m123 * par[3] + par[0];
-    let a1 = m1 * par[5] + m12 * par[6] + m123 * par[7] + par[4];
-    let a2 = m1 * par[9] + m12 * par[10] + m123 * par[11] + par[8];
-    let a3 = m1 * par[13] + m12 * par[14] + m123 * par[15] + par[12];
+    // new fit with zeno data up to m=50
+    let par = [
+        2.90693336e-03,
+        1.17478491e+00,
+        1.66258506e+02,
+        1.15603682e+00,
+        4.15414295e+02,
+        -3.56334057e-01,
+        -2.15779185e+02,
+        3.82507533e+00,
+        -6.44597816e+02,
+        -5.34793865e+00,
+        1.52425427e+02,
+        2.02375273e+00,
+        2.32097107e+02,
+        1.79423250e+01,
+        -7.86470657e+00,
+        -3.84378799e+01,
+    ];
+    let phi = (t_recip * par[0]).tanh().powf(par[1]);
+
+    let a0 = m1 * par[6] + m12 * par[10] + par[2];
+    let a1 = m1 * par[7] + m12 * par[11] + par[3];
+    let a2 = m1 * par[8] + m12 * par[12] + m123 * par[14] + par[4];
+    let a3 = m1 * par[9] + m12 * par[13] + m123 * par[15] + par[5];
 
     let psi = -((t_recip * a1).exp() - 1.0) * a0 - ((t_recip * 2.0 * a3).exp() - 1.0) * a2;
 
