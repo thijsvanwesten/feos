@@ -40,6 +40,7 @@ pub enum ResidualModel {
     #[cfg(feature = "pets")]
     #[implement(molar_weight)]
     Pets(Pets),
+    #[implement(molar_weight)]
     #[cfg(feature = "uvtheory")]
     UVTheory(UVTheory),
 }
