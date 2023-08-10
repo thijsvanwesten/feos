@@ -36,6 +36,8 @@ impl PyUVRecord {
         na: Option<f64>,
         nb: Option<f64>,
         nc: Option<f64>,
+        mu: Option<f64>,
+        q: Option<f64>,
     ) -> Self {
         Self(UVRecord::new(
             m,
@@ -48,6 +50,8 @@ impl PyUVRecord {
             na,
             nb,
             nc,
+            mu,
+            q,
         ))
     }
 
@@ -128,6 +132,8 @@ impl PyUVParameters {
                     att[i],
                     sigma[i],
                     epsilon_k[i],
+                    None,
+                    None,
                     None,
                     None,
                     None,

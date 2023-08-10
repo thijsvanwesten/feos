@@ -145,18 +145,18 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationWC
 }
 
 // (S43) & (S53)
-fn delta_b12u<D: DualNum<f64> + Copy>(
-    t_x: D,
-    mean_field_constant_x: D,
-    weighted_sigma3_ij: D,
-    q_x: D,
-    rm_x: D,
-) -> D {
-    (-mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0) / t_x
-        * 2.0
-        * PI
-        * weighted_sigma3_ij
-}
+// fn delta_b12u<D: DualNum<f64> + Copy>(
+//     t_x: D,
+//     mean_field_constant_x: D,
+//     weighted_sigma3_ij: D,
+//     q_x: D,
+//     rm_x: D,
+// ) -> D {
+//     (-mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0) / t_x
+//         * 2.0
+//         * PI
+//         * weighted_sigma3_ij
+// }
 
 fn residual_virial_coefficient<D: DualNum<f64> + Copy>(p: &UVParameters, x: &Array1<D>, t: D) -> D {
     let mut delta_b2bar = D::zero();
@@ -350,9 +350,9 @@ mod test {
         let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
         dbg!(t_x);
         let q_vdw = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
-        let b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x)
-            / p.sigma[0].powi(3);
-        assert_relative_eq!(b21u.re(), -1.02233215790525, epsilon = 1e-12);
+        // let b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x)
+        //     / p.sigma[0].powi(3);
+        // assert_relative_eq!(b21u.re(), -1.02233215790525, epsilon = 1e-12);
 
         let i_wca =
             correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_vdw, rm_x);
@@ -373,12 +373,12 @@ mod test {
 
         assert_relative_eq!(u_fraction_wca.re(), 0.997069754340431, epsilon = 1e-5);
 
-        let a_test = delta_a1u
-            + (-u_fraction_wca + 1.0)
-                * (b2bar - b21u)
-                * p.sigma[0].powi(3)
-                * state.partial_density.sum();
-        dbg!(a_test);
+        // let a_test = delta_a1u
+        //     + (-u_fraction_wca + 1.0)
+        //         * (b2bar - b21u)
+        //         * p.sigma[0].powi(3)
+        //         * state.partial_density.sum();
+        // dbg!(a_test);
         dbg!(state.moles.sum());
         let a = pt.helmholtz_energy(&state) / moles[0];
         dbg!(a.re());
@@ -417,9 +417,9 @@ mod test {
 
         let q_vdw = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
         dbg!(q_vdw.re());
-        let delta_b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
-        dbg!(delta_b21u);
-        assert_relative_eq!(delta_b21u, -3.9309384983526585, epsilon = 1e-6);
+        // let delta_b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
+        // dbg!(delta_b21u);
+        // assert_relative_eq!(delta_b21u, -3.9309384983526585, epsilon = 1e-6);
 
         // delta a1u
         let rho_x = state.partial_density.sum() * sigma_x.powi(3);
@@ -487,12 +487,12 @@ mod test {
         let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
         let t_x = state.temperature / epsilon_k_x;
         let q_vdw = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
-        let delta_b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
-        assert_relative_eq!(delta_b21u, -10.841841323394299, epsilon = 1e-6);
+        // let delta_b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
+        // assert_relative_eq!(delta_b21u, -10.841841323394299, epsilon = 1e-6);
 
-        let a_ufrac = (-phi_u + 1.0) * (b2bar - delta_b21u) * density;
-        assert_relative_eq!(a_ufrac, -0.0136498856091876, epsilon = 1e-6);
-        // delta b20
+        // let a_ufrac = (-phi_u + 1.0) * (b2bar - delta_b21u) * density;
+        // assert_relative_eq!(a_ufrac, -0.0136498856091876, epsilon = 1e-6);
+        // // delta b20
         dbg!(d_x.re());
 
         // delta a1u

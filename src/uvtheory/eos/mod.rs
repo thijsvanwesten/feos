@@ -16,6 +16,7 @@ pub(crate) mod chain_bh_tptv;
 pub(crate) mod chain_bh_tpty;
 pub(crate) mod hard_sphere_bh;
 pub(crate) mod hard_sphere_wca;
+pub(crate) mod polar;
 pub(crate) mod reference_perturbation_bh;
 pub(crate) mod reference_perturbation_uvb3;
 pub(crate) mod reference_perturbation_wca;
@@ -27,6 +28,8 @@ use chain_bh_tptv::ChainBhTptv;
 use chain_bh_tpty::ChainBH;
 use hard_sphere_bh::HardSphereBH;
 use hard_sphere_wca::HardSphereWCA;
+//pub use polar::DQVariants;
+use polar::{Dipole, DipoleQuadrupole, Quadrupole};
 use reference_perturbation_bh::ReferencePerturbationBH;
 use reference_perturbation_uvb3::ReferencePerturbationUVB3;
 use reference_perturbation_wca::ReferencePerturbationWCA;
@@ -66,6 +69,7 @@ pub struct UVTheoryOptions {
     pub combination_rule: CombinationRule,
     pub max_iter_cross_assoc: usize,
     pub tol_cross_assoc: f64,
+    //pub dq_variant: DQVariants,
 }
 
 impl Default for UVTheoryOptions {
@@ -77,6 +81,7 @@ impl Default for UVTheoryOptions {
             combination_rule: CombinationRule::ArithmeticPhi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         }
     }
 }
@@ -99,7 +104,7 @@ impl UVTheory {
         parameters: Arc<UVParameters>,
         options: UVTheoryOptions,
     ) -> EosResult<Self> {
-        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(3);
+        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(8);
 
         match options.perturbation {
             Perturbation::BarkerHenderson => match options.virial_order {
@@ -172,7 +177,22 @@ impl UVTheory {
                 options.tol_cross_assoc,
             )));
         };
-
+        if parameters.ndipole > 0 {
+            contributions.push(Box::new(Dipole {
+                parameters: parameters.clone(),
+            }));
+        };
+        if parameters.nquadpole > 0 {
+            contributions.push(Box::new(Quadrupole {
+                parameters: parameters.clone(),
+            }));
+        };
+        if parameters.ndipole > 0 && parameters.nquadpole > 0 {
+            contributions.push(Box::new(DipoleQuadrupole {
+                parameters: parameters.clone(),
+                //variant: options.dq_variant,
+            }));
+        };
         Ok(Self {
             parameters,
             options,
@@ -235,6 +255,7 @@ mod test {
             combination_rule: CombinationRule::OneFluidPsi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -267,7 +288,12 @@ mod test {
             s.residual_helmholtz_energy()
                 .to_reduced(RGAS * s.temperature * s.total_moles)?
         );
-        assert!(1 == 2);
+
+        let a = (s.residual_helmholtz_energy() / s.total_moles)
+            .to_reduced(RGAS * s.temperature)
+            .unwrap();
+        assert_relative_eq!(a, -0.025994839368858807, max_relative = 1e-12); //wca
+                                                                             //assert_relative_eq!(atot, -0.0259948394, max_relative = 1e-12);
         Ok(())
     }
 
@@ -287,6 +313,7 @@ mod test {
             combination_rule: CombinationRule::OneFluidPsi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -302,7 +329,7 @@ mod test {
             reduced_volume * (p.sigma[0] * ANGSTROM).powi(3),
             &m,
         )?;
-        dbg!(s.temperature.to_reduced(KELVIN));
+
         let contributions = s.residual_helmholtz_energy_contributions();
 
         println!(
@@ -358,6 +385,7 @@ mod test {
             combination_rule: CombinationRule::OneFluidPsi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -372,7 +400,8 @@ mod test {
             .to_reduced(RGAS * temperature)
             .unwrap();
 
-        assert_relative_eq!(a, 2.993577305779432, max_relative = 1e-12);
+        //assert_relative_eq!(a, 2.993577305779432, max_relative = 1e-12); //Monomer Verison
+        assert_relative_eq!(a, 2.8835102086093167, max_relative = 1e-12);
         Ok(())
     }
 
@@ -390,6 +419,7 @@ mod test {
             combination_rule: CombinationRule::OneFluidPsi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -415,13 +445,17 @@ mod test {
         let rep1 = 24.0;
         let eps_k1 = 150.03;
         let sig1 = 3.7039;
-        let r1 = UVRecord::new(1.0, rep1, 6.0, sig1, eps_k1, None, None, None, None, None);
+        let r1 = UVRecord::new(
+            1.0, rep1, 6.0, sig1, eps_k1, None, None, None, None, None, None, None,
+        );
         let i = Identifier::new(None, None, None, None, None, None);
         // compontent 2
         let rep2 = 24.0;
         let eps_k2 = 150.03;
         let sig2 = 3.7039;
-        let r2 = UVRecord::new(1.0, rep2, 6.0, sig2, eps_k2, None, None, None, None, None);
+        let r2 = UVRecord::new(
+            1.0, rep2, 6.0, sig2, eps_k2, None, None, None, None, None, None, None,
+        );
         let j = Identifier::new(None, None, None, None, None, None);
         //////////////
 
@@ -447,6 +481,7 @@ mod test {
             combination_rule: CombinationRule::ArithmeticPhi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
         };
 
         let eos_bh = Arc::new(UVTheory::with_options(Arc::new(uv_parameters), options)?);

@@ -1,4 +1,5 @@
 use crate::association::{AssociationParameters, AssociationRecord, BinaryAssociationRecord};
+use crate::hard_sphere::{HardSphereProperties, MonomerShape};
 use feos_core::parameter::{Identifier, ParameterError};
 use feos_core::parameter::{Parameter, PureRecord};
 use lazy_static::lazy_static;
@@ -7,12 +8,11 @@ use ndarray::prelude::*;
 use ndarray::Array2;
 use num_dual::DualNum;
 use num_traits::Zero;
+use quantity::si::{JOULE, KB, KELVIN};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
-
-use crate::hard_sphere::{HardSphereProperties, MonomerShape};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NoRecord;
@@ -35,6 +35,12 @@ pub struct UVRecord {
     #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub association_record: Option<AssociationRecord>,
+    /// Dipole moment in units of Debye
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mu: Option<f64>,
+    /// Quadrupole moment in units of Debye
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<f64>,
 }
 
 impl UVRecord {
@@ -50,6 +56,8 @@ impl UVRecord {
         na: Option<f64>,
         nb: Option<f64>,
         nc: Option<f64>,
+        mu: Option<f64>,
+        q: Option<f64>,
     ) -> UVRecord {
         let association_record = if kappa_ab.is_none()
             && epsilon_k_ab.is_none()
@@ -74,6 +82,8 @@ impl UVRecord {
             sigma,
             epsilon_k,
             association_record,
+            mu,
+            q,
         }
     }
 }
@@ -191,11 +201,19 @@ pub struct UVParameters {
     pub sigma: Array1<f64>,
     pub epsilon_k: Array1<f64>,
     pub association: AssociationParameters,
+    pub mu: Array1<f64>,
+    pub q: Array1<f64>,
+    pub mu2: Array1<f64>,
+    pub q2: Array1<f64>,
     pub molarweight: Array1<f64>,
     pub rep_ij: Array2<f64>,
     pub att_ij: Array2<f64>,
     pub sigma_ij: Array2<f64>,
     pub eps_k_ij: Array2<f64>,
+    pub ndipole: usize,
+    pub nquadpole: usize,
+    pub dipole_comp: Array1<usize>,
+    pub quadpole_comp: Array1<usize>,
     pub cd_bh_pure: Vec<Array1<f64>>,
     pub cd_bh_binary: Array2<Array1<f64>>,
     pub pure_records: Vec<PureRecord<UVRecord>>,
@@ -220,6 +238,8 @@ impl Parameter for UVParameters {
         let mut epsilon_k = Array::zeros(n);
         let mut component_index = HashMap::with_capacity(n);
         let mut association_records = Vec::with_capacity(n);
+        let mut mu = Array::zeros(n);
+        let mut q = Array::zeros(n);
 
         for (i, record) in pure_records.iter().enumerate() {
             component_index.insert(record.identifier.clone(), i);
@@ -230,10 +250,29 @@ impl Parameter for UVParameters {
             sigma[i] = r.sigma;
             epsilon_k[i] = r.epsilon_k;
             association_records.push(r.association_record.into_iter().collect());
+            mu[i] = r.mu.unwrap_or(0.0);
+            q[i] = r.q.unwrap_or(0.0);
             // construction of molar weights for GC methods, see Builder
             molarweight[i] = record.molarweight;
         }
-
+        let mu2 = &mu * &mu / (&m * &sigma * &sigma * &sigma * &epsilon_k)
+            * 1e-19
+            * (JOULE / KELVIN / KB).into_value().unwrap();
+        let q2 = &q * &q / (&m * &sigma.mapv(|s| s.powi(5)) * &epsilon_k)
+            * 1e-19
+            * (JOULE / KELVIN / KB).into_value().unwrap();
+        let dipole_comp: Array1<usize> = mu2
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &mu2)| (mu2.abs() > 0.0).then_some(i))
+            .collect();
+        let ndipole = dipole_comp.len();
+        let quadpole_comp: Array1<usize> = q2
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &q2)| (q2.abs() > 0.0).then_some(i))
+            .collect();
+        let nquadpole = quadpole_comp.len();
         let mut rep_ij = Array2::zeros((n, n));
         let mut att_ij = Array2::zeros((n, n));
         let mut sigma_ij = Array2::zeros((n, n));
@@ -283,11 +322,19 @@ impl Parameter for UVParameters {
             sigma,
             epsilon_k,
             association,
+            mu,
+            q,
+            mu2,
+            q2,
             molarweight,
             rep_ij,
             att_ij,
             sigma_ij,
             eps_k_ij,
+            ndipole,
+            nquadpole,
+            dipole_comp,
+            quadpole_comp,
             cd_bh_pure,
             cd_bh_binary,
             pure_records,
@@ -303,8 +350,9 @@ impl Parameter for UVParameters {
 impl UVParameters {
     /// Parameters for a single substance with molar weight one and no (default) ideal gas contributions.
     pub fn new_simple(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
-        let model_record =
-            UVRecord::new(m, rep, att, sigma, epsilon_k, None, None, None, None, None);
+        let model_record = UVRecord::new(
+            m, rep, att, sigma, epsilon_k, None, None, None, None, None, None, None,
+        );
         let pure_record = PureRecord::new(Identifier::default(), 1.0, model_record);
         Self::new_pure(pure_record).unwrap()
     }
@@ -333,6 +381,8 @@ impl UVParameters {
             Some(na),
             Some(nb),
             Some(nc),
+            None,
+            None,
         );
         let pure_record = PureRecord::new(Identifier::default(), mw, model_record);
         Self::new_pure(pure_record).unwrap()
@@ -350,13 +400,13 @@ impl UVParameters {
         //let n = u_frac_params[[0..]].len();
 
         let model_record = UVRecord::new(
-            m[0], rep[0], att[0], sigma[0], epsilon[0], None, None, None, None, None,
+            m[0], rep[0], att[0], sigma[0], epsilon[0], None, None, None, None, None, None, None,
         );
         let pr1 = PureRecord::new(identifier, 1.0, model_record);
         //
         let identifier2 = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record2 = UVRecord::new(
-            m[1], rep[1], att[1], sigma[1], epsilon[1], None, None, None, None, None,
+            m[1], rep[1], att[1], sigma[1], epsilon[1], None, None, None, None, None, None, None,
         );
         let pr2 = PureRecord::new(identifier2, 1.0, model_record2);
         let pure_records = vec![pr1, pr2];
@@ -426,7 +476,9 @@ pub mod utils {
 
     pub fn test_parameters(m: f64, rep: f64, att: f64, sigma: f64, epsilon: f64) -> UVParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record = UVRecord::new(m, rep, att, sigma, epsilon, None, None, None, None, None);
+        let model_record = UVRecord::new(
+            m, rep, att, sigma, epsilon, None, None, None, None, None, None, None,
+        );
         let pr = PureRecord::new(identifier, 1.0, model_record);
         UVParameters::new_pure(pr).unwrap()
     }
@@ -440,13 +492,13 @@ pub mod utils {
     ) -> UVParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record = UVRecord::new(
-            m[0], rep[0], att[0], sigma[0], epsilon[0], None, None, None, None, None,
+            m[0], rep[0], att[0], sigma[0], epsilon[0], None, None, None, None, None, None, None,
         );
         let pr1 = PureRecord::new(identifier, 1.0, model_record);
         //
         let identifier2 = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record2 = UVRecord::new(
-            m[1], rep[1], att[1], sigma[1], epsilon[1], None, None, None, None, None,
+            m[1], rep[1], att[1], sigma[1], epsilon[1], None, None, None, None, None, None, None,
         );
         let pr2 = PureRecord::new(identifier2, 1.0, model_record2);
         let pure_records = vec![pr1, pr2];
@@ -455,9 +507,63 @@ pub mod utils {
 
     pub fn methane_parameters(rep: f64, att: f64) -> UVParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record =
-            UVRecord::new(1.0, rep, att, 3.7039, 150.03, None, None, None, None, None);
+        let model_record = UVRecord::new(
+            1.0, rep, att, 3.7039, 150.03, None, None, None, None, None, None, None,
+        );
         let pr = PureRecord::new(identifier, 1.0, model_record);
         UVParameters::new_pure(pr).unwrap()
+    }
+
+    pub fn dme_parameters() -> UVParameters {
+        let dme_json = r#"
+            {
+                "identifier": {
+                    "cas": "115-10-6",
+                    "name": "dimethyl-ether",
+                    "iupac_name": "methoxymethane",
+                    "smiles": "COC",
+                    "inchi": "InChI=1/C2H6O/c1-3-2/h1-2H3",
+                    "formula": "C2H6O"
+                },
+                "model_record": {
+                    "m": 2.2634,
+                    "rep":12.0,
+                    "att":6.0,
+                    "sigma": 3.2723,
+                    "epsilon_k": 210.29,
+                    "mu": 1.3
+                },
+                "molarweight": 46.0688
+            }"#;
+        let dme_record: PureRecord<UVRecord> =
+            serde_json::from_str(dme_json).expect("Unable to parse json.");
+        UVParameters::new_pure(dme_record).unwrap()
+    }
+
+    pub fn carbon_dioxide_parameters() -> UVParameters {
+        let co2_json = r#"
+        {
+            "identifier": {
+                "cas": "124-38-9",
+                "name": "carbon-dioxide",
+                "iupac_name": "carbon dioxide",
+                "smiles": "O=C=O",
+                "inchi": "InChI=1/CO2/c2-1-3",
+                "formula": "CO2"
+            },
+            "molarweight": 44.0098,
+            "model_record": {
+                "m": 1.5131,
+                "rep":12.0,
+                "att":6.0,
+                "sigma": 3.1869,
+                "epsilon_k": 163.333,
+                "q": 4.4
+
+            }
+        }"#;
+        let co2_record: PureRecord<UVRecord> =
+            serde_json::from_str(co2_json).expect("Unable to parse json.");
+        UVParameters::new_pure(co2_record).unwrap()
     }
 }

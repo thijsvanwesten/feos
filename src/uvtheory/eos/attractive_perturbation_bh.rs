@@ -663,7 +663,7 @@ mod test {
         dbg!(&state.temperature);
         dbg!(&reduced_temperature);
         dbg!(&p.epsilon_k[0]);
-        assert_eq!(1, 2);
+        assert_eq!(delta_b2, -36.83548303945616);
     }
 
     #[test]
@@ -685,6 +685,6 @@ mod test {
         );
         let a = pt.helmholtz_energy(&state) / moles.sum();
         dbg!(a);
-        assert_eq!(1, 2)
+        assert_eq!(a, -0.12670343489444227)
     }
 }
