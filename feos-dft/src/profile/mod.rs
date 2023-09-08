@@ -2,12 +2,14 @@ use crate::convolver::{BulkConvolver, Convolver};
 use crate::functional::{HelmholtzEnergyFunctional, DFT};
 use crate::geometry::Grid;
 use crate::solver::{DFTSolver, DFTSolverLog};
-use feos_core::{Components, EosError, EosResult, EosUnit, State};
-use ndarray::{Array, Array1, ArrayBase, Axis as Axis_nd, Data, Dimension, Ix1, Ix2, Ix3};
-use quantity::si::{SIArray, SIArray1, SINumber, SIUnit};
-use quantity::Quantity;
-use std::ops::MulAssign;
+use feos_core::si::{Density, Length, Moles, Quantity, Temperature, Volume, _Volume, DEGREES};
+use feos_core::{Components, EosError, EosResult, State};
+use ndarray::{
+    Array, Array1, Array2, Array3, ArrayBase, Axis as Axis_nd, Data, Dimension, Ix1, Ix2, Ix3,
+};
+use std::ops::{Add, MulAssign};
 use std::sync::Arc;
+use typenum::Sum;
 
 mod properties;
 
@@ -50,14 +52,14 @@ impl DFTSpecifications {
     /// particles constant in systems, where the number itself is difficult to obtain.
     pub fn moles_from_profile<D: Dimension, F: HelmholtzEnergyFunctional>(
         profile: &DFTProfile<D, F>,
-    ) -> EosResult<Arc<Self>>
+    ) -> Arc<Self>
     where
-        <D as Dimension>::Larger: Dimension<Smaller = D>,
+        D::Larger: Dimension<Smaller = D>,
     {
-        let rho = profile.density.to_reduced(SIUnit::reference_density())?;
-        Ok(Arc::new(Self::Moles {
+        let rho = profile.density.to_reduced();
+        Arc::new(Self::Moles {
             moles: profile.integrate_reduced_comp(&rho),
-        }))
+        })
     }
 
     /// Calculate the number of particles from the profile.
@@ -66,13 +68,13 @@ impl DFTSpecifications {
     /// particles constant in systems, e.g. to fix the equimolar dividing surface.
     pub fn total_moles_from_profile<D: Dimension, F: HelmholtzEnergyFunctional>(
         profile: &DFTProfile<D, F>,
-    ) -> EosResult<Arc<Self>>
+    ) -> Arc<Self>
     where
-        <D as Dimension>::Larger: Dimension<Smaller = D>,
+        D::Larger: Dimension<Smaller = D>,
     {
-        let rho = profile.density.to_reduced(SIUnit::reference_density())?;
+        let rho = profile.density.to_reduced();
         let moles = profile.integrate_reduced_comp(&rho).sum();
-        Ok(Arc::new(Self::TotalMoles { total_moles: moles }))
+        Arc::new(Self::TotalMoles { total_moles: moles })
     }
 }
 
@@ -98,8 +100,8 @@ pub struct DFTProfile<D: Dimension, F> {
     pub grid: Grid,
     pub convolver: Arc<dyn Convolver<f64, D>>,
     pub dft: Arc<DFT<F>>,
-    pub temperature: SINumber,
-    pub density: SIArray<D::Larger>,
+    pub temperature: Temperature,
+    pub density: Density<Array<f64, D::Larger>>,
     pub specification: Arc<dyn DFTSpecification<D, F>>,
     pub external_potential: Array<f64, D::Larger>,
     pub bulk: State<DFT<F>>,
@@ -107,57 +109,88 @@ pub struct DFTProfile<D: Dimension, F> {
 }
 
 impl<F> DFTProfile<Ix1, F> {
-    pub fn r(&self) -> SIArray1 {
-        self.grid.grids()[0] * SIUnit::reference_length()
+    pub fn r(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[0].to_owned())
     }
 
-    pub fn z(&self) -> SIArray1 {
-        self.grid.grids()[0] * SIUnit::reference_length()
+    pub fn z(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[0].to_owned())
     }
 }
 
 impl<F> DFTProfile<Ix2, F> {
-    pub fn edges(&self) -> (SIArray1, SIArray1) {
-        (
-            &self.grid.axes()[0].edges * SIUnit::reference_length(),
-            &self.grid.axes()[1].edges * SIUnit::reference_length(),
-        )
+    pub fn edges(&self) -> [Length<Array1<f64>>; 2] {
+        [
+            Length::from_reduced(self.grid.axes()[0].edges.to_owned()),
+            Length::from_reduced(self.grid.axes()[1].edges.to_owned()),
+        ]
     }
 
-    pub fn r(&self) -> SIArray1 {
-        self.grid.grids()[0] * SIUnit::reference_length()
+    pub fn meshgrid(&self) -> [Length<Array2<f64>>; 2] {
+        let (u, v, alpha) = match &self.grid {
+            Grid::Cartesian2(u, v) => (u, v, 90.0 * DEGREES),
+            Grid::Periodical2(u, v, alpha) => (u, v, *alpha),
+            _ => unreachable!(),
+        };
+        let u_grid = Array::from_shape_fn([u.grid.len(), v.grid.len()], |(i, _)| u.grid[i]);
+        let v_grid = Array::from_shape_fn([u.grid.len(), v.grid.len()], |(_, j)| v.grid[j]);
+        let x = Length::from_reduced(u_grid + &v_grid * alpha.cos());
+        let y = Length::from_reduced(v_grid * alpha.sin());
+        [x, y]
     }
 
-    pub fn z(&self) -> SIArray1 {
-        self.grid.grids()[1] * SIUnit::reference_length()
+    pub fn r(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[0].to_owned())
+    }
+
+    pub fn z(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[1].to_owned())
     }
 }
 
 impl<F> DFTProfile<Ix3, F> {
-    pub fn edges(&self) -> (SIArray1, SIArray1, SIArray1) {
-        (
-            &self.grid.axes()[0].edges * SIUnit::reference_length(),
-            &self.grid.axes()[1].edges * SIUnit::reference_length(),
-            &self.grid.axes()[2].edges * SIUnit::reference_length(),
-        )
+    pub fn edges(&self) -> [Length<Array1<f64>>; 3] {
+        [
+            Length::from_reduced(self.grid.axes()[0].edges.to_owned()),
+            Length::from_reduced(self.grid.axes()[1].edges.to_owned()),
+            Length::from_reduced(self.grid.axes()[2].edges.to_owned()),
+        ]
     }
 
-    pub fn x(&self) -> SIArray1 {
-        self.grid.grids()[0] * SIUnit::reference_length()
+    pub fn meshgrid(&self) -> [Length<Array3<f64>>; 3] {
+        let (u, v, w, [alpha, beta, gamma]) = match &self.grid {
+            Grid::Cartesian3(u, v, w) => (u, v, w, [90.0 * DEGREES; 3]),
+            Grid::Periodical3(u, v, w, angles) => (u, v, w, *angles),
+            _ => unreachable!(),
+        };
+        let shape = [u.grid.len(), v.grid.len(), w.grid.len()];
+        let u_grid = Array::from_shape_fn(shape, |(i, _, _)| u.grid[i]);
+        let v_grid = Array::from_shape_fn(shape, |(_, j, _)| v.grid[j]);
+        let w_grid = Array::from_shape_fn(shape, |(_, _, k)| w.grid[k]);
+        let xi = (alpha.cos() - gamma.cos() * beta.cos()) / gamma.sin();
+        let zeta = (1.0 - beta.cos().powi(2) - xi * xi).sqrt();
+        let x = Length::from_reduced(u_grid + &v_grid * gamma.cos() + &w_grid * beta.cos());
+        let y = Length::from_reduced(v_grid * gamma.sin() + &w_grid * xi);
+        let z = Length::from_reduced(w_grid * zeta);
+        [x, y, z]
     }
 
-    pub fn y(&self) -> SIArray1 {
-        self.grid.grids()[1] * SIUnit::reference_length()
+    pub fn x(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[0].to_owned())
     }
 
-    pub fn z(&self) -> SIArray1 {
-        self.grid.grids()[2] * SIUnit::reference_length()
+    pub fn y(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[1].to_owned())
+    }
+
+    pub fn z(&self) -> Length<Array1<f64>> {
+        Length::from_reduced(self.grid.grids()[2].to_owned())
     }
 }
 
 impl<D: Dimension, F: HelmholtzEnergyFunctional> DFTProfile<D, F>
 where
-    <D as Dimension>::Larger: Dimension<Smaller = D>,
+    D::Larger: Dimension<Smaller = D>,
 {
     /// Create a new density profile.
     ///
@@ -170,8 +203,8 @@ where
         convolver: Arc<dyn Convolver<f64, D>>,
         bulk: &State<DFT<F>>,
         external_potential: Option<Array<f64, D::Larger>>,
-        density: Option<&SIArray<D::Larger>>,
-    ) -> EosResult<Self> {
+        density: Option<&Density<Array<f64, D::Larger>>>,
+    ) -> Self {
         let dft = bulk.eos.clone();
 
         // initialize external potential
@@ -185,27 +218,23 @@ where
 
         // initialize density
         let density = if let Some(density) = density {
-            density.clone()
+            density.to_owned()
         } else {
-            let t = bulk
-                .temperature
-                .to_reduced(SIUnit::reference_temperature())?;
+            let t = bulk.temperature.to_reduced();
             let exp_dfdrho = (-&external_potential).mapv(f64::exp);
             let mut bonds = dft.bond_integrals(t, &exp_dfdrho, &convolver);
             bonds *= &exp_dfdrho;
             let mut density = Array::zeros(external_potential.raw_dim());
-            let bulk_density = bulk
-                .partial_density
-                .to_reduced(SIUnit::reference_density())?;
+            let bulk_density = bulk.partial_density.to_reduced();
             for (s, &c) in dft.component_index().iter().enumerate() {
                 density.index_axis_mut(Axis_nd(0), s).assign(
                     &(bonds.index_axis(Axis_nd(0), s).map(|is| is.min(1.0)) * bulk_density[c]),
                 );
             }
-            density * SIUnit::reference_density()
+            Density::from_reduced(density)
         };
 
-        Ok(Self {
+        Self {
             grid,
             convolver,
             dft: bulk.eos.clone(),
@@ -215,18 +244,18 @@ where
             external_potential,
             bulk: bulk.clone(),
             solver_log: None,
-        })
+        }
     }
 
     fn integrate_reduced(&self, mut profile: Array<f64, D>) -> f64 {
-        let integration_weights = self.grid.integration_weights();
+        let (integration_weights, functional_determinant) = self.grid.integration_weights();
 
         for (i, w) in integration_weights.into_iter().enumerate() {
             for mut l in profile.lanes_mut(Axis_nd(i)) {
                 l.mul_assign(w);
             }
         }
-        profile.sum()
+        profile.sum() * functional_determinant
     }
 
     fn integrate_reduced_comp(&self, profile: &Array<f64, D::Larger>) -> Array1<f64> {
@@ -237,60 +266,71 @@ where
 
     /// Return the volume of the profile.
     ///
-    /// Depending on the geometry, the result is in m, m² or m³.
-    pub fn volume(&self) -> SINumber {
-        self.grid
-            .axes()
-            .iter()
-            .fold(None, |acc, &ax| {
-                Some(acc.map_or(ax.volume(), |acc| acc * ax.volume()))
-            })
-            .unwrap()
+    /// In periodic directions, the length is assumed to be 1 Å.
+    pub fn volume(&self) -> Volume {
+        let volume: f64 = self.grid.axes().iter().map(|ax| ax.volume()).product();
+        Volume::from_reduced(volume * self.grid.functional_determinant())
     }
 
     /// Integrate a given profile over the iteration domain.
-    pub fn integrate<S: Data<Elem = f64>>(
+    pub fn integrate<S: Data<Elem = f64>, U>(
         &self,
-        profile: &Quantity<ArrayBase<S, D>, SIUnit>,
-    ) -> SINumber {
-        profile.integrate(&self.grid.integration_weights_unit())
+        profile: &Quantity<ArrayBase<S, D>, U>,
+    ) -> Quantity<f64, Sum<_Volume, U>>
+    where
+        _Volume: Add<U>,
+    {
+        let (integration_weights, functional_determinant) = self.grid.integration_weights();
+        let mut value = profile.to_owned();
+        for (i, &w) in integration_weights.iter().enumerate() {
+            for mut l in value.lanes_mut(Axis_nd(i)) {
+                l.assign(&(&l * w));
+            }
+        }
+        Volume::from_reduced(functional_determinant) * value.sum()
     }
 
     /// Integrate each component individually.
-    pub fn integrate_comp<S: Data<Elem = f64>>(
+    pub fn integrate_comp<S: Data<Elem = f64>, U>(
         &self,
-        profile: &Quantity<ArrayBase<S, D::Larger>, SIUnit>,
-    ) -> SIArray1 {
-        SIArray1::from_shape_fn(profile.shape()[0], |i| {
+        profile: &Quantity<ArrayBase<S, D::Larger>, U>,
+    ) -> Quantity<Array1<f64>, Sum<_Volume, U>>
+    where
+        _Volume: Add<U>,
+    {
+        Quantity::from_shape_fn(profile.shape()[0], |i| {
             self.integrate(&profile.index_axis(Axis_nd(0), i))
         })
     }
 
     /// Integrate each segment individually and aggregate to components.
-    pub fn integrate_segments<S: Data<Elem = f64>>(
+    pub fn integrate_segments<S: Data<Elem = f64>, U>(
         &self,
-        profile: &Quantity<ArrayBase<S, D::Larger>, SIUnit>,
-    ) -> SIArray1 {
+        profile: &Quantity<ArrayBase<S, D::Larger>, U>,
+    ) -> Quantity<Array1<f64>, Sum<_Volume, U>>
+    where
+        _Volume: Add<U>,
+    {
         let integral = self.integrate_comp(profile);
-        let mut integral_comp = Array1::zeros(self.dft.components()) * integral.get(0);
+        let mut integral_comp = Quantity::zeros(self.dft.components());
         for (i, &j) in self.dft.component_index().iter().enumerate() {
-            integral_comp.try_set(j, integral.get(i)).unwrap();
+            integral_comp.set(j, integral.get(i));
         }
         integral_comp
     }
 
     /// Return the number of moles of each component in the system.
-    pub fn moles(&self) -> SIArray1 {
+    pub fn moles(&self) -> Moles<Array1<f64>> {
         self.integrate_segments(&self.density)
     }
 
     /// Return the total number of moles in the system.
-    pub fn total_moles(&self) -> SINumber {
+    pub fn total_moles(&self) -> Moles {
         self.moles().sum()
     }
 }
 
-impl<D: Dimension, F> Clone for DFTProfile<D, F> {
+impl<D: Dimension + Clone, F> Clone for DFTProfile<D, F> {
     fn clone(&self) -> Self {
         Self {
             grid: self.grid.clone(),
@@ -306,9 +346,8 @@ impl<D: Dimension, F> Clone for DFTProfile<D, F> {
     }
 }
 
-impl<D, F> DFTProfile<D, F>
+impl<D: Dimension, F> DFTProfile<D, F>
 where
-    D: Dimension,
     D::Larger: Dimension<Smaller = D>,
     <D::Larger as Dimension>::Larger: Dimension<Smaller = D::Larger>,
     F: HelmholtzEnergyFunctional,
@@ -316,17 +355,14 @@ where
     pub fn weighted_densities(&self) -> EosResult<Vec<Array<f64, D::Larger>>> {
         Ok(self
             .convolver
-            .weighted_densities(&self.density.to_reduced(SIUnit::reference_density())?))
+            .weighted_densities(&self.density.to_reduced()))
     }
 
     #[allow(clippy::type_complexity)]
     pub fn residual(&self, log: bool) -> EosResult<(Array<f64, D::Larger>, Array1<f64>, f64)> {
         // Read from profile
-        let density = self.density.to_reduced(SIUnit::reference_density())?;
-        let partial_density = self
-            .bulk
-            .partial_density
-            .to_reduced(SIUnit::reference_density())?;
+        let density = self.density.to_reduced();
+        let partial_density = self.bulk.partial_density.to_reduced();
         let bulk_density = self.dft.component_index().mapv(|i| partial_density[i]);
 
         let (res, res_bulk, res_norm, _, _) =
@@ -348,9 +384,7 @@ where
         Array<f64, D::Larger>,
     )> {
         // calculate reduced temperature
-        let temperature = self
-            .temperature
-            .to_reduced(SIUnit::reference_temperature())?;
+        let temperature = self.temperature.to_reduced();
 
         // calculate intrinsic functional derivative
         let (_, mut dfdrho) =
@@ -428,26 +462,21 @@ where
 
         // Read from profile
         let component_index = self.dft.component_index().into_owned();
-        let mut density = self.density.to_reduced(SIUnit::reference_density())?;
-        let partial_density = self
-            .bulk
-            .partial_density
-            .to_reduced(SIUnit::reference_density())?;
+        let mut density = self.density.to_reduced();
+        let partial_density = self.bulk.partial_density.to_reduced();
         let mut bulk_density = component_index.mapv(|i| partial_density[i]);
 
         // Call solver(s)
         self.call_solver(&mut density, &mut bulk_density, &solver, debug)?;
 
         // Update profile
-        self.density = density * SIUnit::reference_density();
-        let volume = SIUnit::reference_volume();
+        self.density = Density::from_reduced(density);
+        let volume = Volume::from_reduced(1.0);
         let mut moles = self.bulk.moles.clone();
         bulk_density
             .into_iter()
             .enumerate()
-            .try_for_each(|(i, r)| {
-                moles.try_set(component_index[i], r * SIUnit::reference_density() * volume)
-            })?;
+            .for_each(|(i, r)| moles.set(component_index[i], Density::from_reduced(r) * volume));
         self.bulk = State::new_nvt(&self.bulk.eos, self.bulk.temperature, volume, &moles)?;
 
         Ok(())

@@ -1,9 +1,9 @@
 use crate::saftvrqmie::eos::FeynmanHibbsOrder;
 use core::cmp::max;
-use feos_core::parameter::{Parameter, ParameterError, PureRecord};
+use feos_core::parameter::{Identifier, Parameter, ParameterError, PureRecord};
+use feos_core::si::{Length, Temperature, CALORIE, GRAM, KELVIN, KILO, KILOGRAM, MOL, NAV, RGAS};
 use ndarray::{Array, Array1, Array2};
 use num_traits::Zero;
-use quantity::si::{SINumber, ANGSTROM, CALORIE, GRAM, KELVIN, KILO, KILOGRAM, MOL, NAV, RGAS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -66,8 +66,13 @@ impl SaftVRQMieRecord {
         viscosity: Option<[f64; 4]>,
         diffusion: Option<[f64; 5]>,
         thermal_conductivity: Option<[f64; 4]>,
-    ) -> SaftVRQMieRecord {
-        SaftVRQMieRecord {
+    ) -> Result<SaftVRQMieRecord, ParameterError> {
+        // if m > 10000.0 {
+        //     return Err(ParameterError::IncompatibleParameters(format!(
+        //         "Segment number `m` is too large. Chain-contributions are currently not supported."
+        //     )));
+        // }
+        Ok(SaftVRQMieRecord {
             m,
             sigma,
             epsilon_k,
@@ -77,7 +82,7 @@ impl SaftVRQMieRecord {
             viscosity,
             diffusion,
             thermal_conductivity,
-        }
+        })
     }
 }
 
@@ -171,6 +176,16 @@ impl Parameter for SaftVRQMieParameters {
         for (i, record) in pure_records.iter().enumerate() {
             component_index.insert(record.identifier.clone(), i);
             let r = &record.model_record;
+            // if r.m > 10000.0 {
+            //     return Err(
+            //         ParameterError::IncompatibleParameters(
+            //             format!(
+            //                 "Segment number `m` for component {} is not one. Chain-contributions are currently not supported.",
+            //                 i
+            //             )
+            //         )
+            //     );
+            // }
             m[i] = r.m;
             sigma[i] = r.sigma;
             epsilon_k[i] = r.epsilon_k;
@@ -195,7 +210,7 @@ impl Parameter for SaftVRQMieParameters {
         let mut lambda_a_ij = Array::zeros((n, n));
         let mut c_ij = Array::zeros((n, n));
         let mut mass_ij = Array::zeros((n, n));
-        let to_mass_per_molecule = (GRAM / MOL / NAV).to_reduced(KILOGRAM).unwrap();
+        let to_mass_per_molecule = (GRAM / MOL / NAV / KILOGRAM).into_value();
         for i in 0..n {
             for j in 0..n {
                 sigma_ij[[i, j]] = (1.0 - l_ij[[i, j]]) * 0.5 * (sigma[i] + sigma[j]);
@@ -321,6 +336,26 @@ impl SaftVRQMieParameters {
         output
     }
 
+    // Generate Parameter for pure substance
+
+    pub fn new_simple(
+        m: f64,
+        lr: f64,
+        la: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        mw: f64,
+        fh: usize,
+    ) -> SaftVRQMieParameters {
+        let model_record = SaftVRQMieRecord::new(m, sigma, epsilon_k, lr, la, fh, None, None, None);
+
+        // Unwrap the Result, which will panic if there's an error
+        let saftvrqmie_record = model_record.unwrap();
+
+        let pure_record = PureRecord::new(Identifier::default(), mw, saftvrqmie_record);
+        SaftVRQMieParameters::new_pure(pure_record).unwrap()
+    }
+
     /// Generate energy and force tables to be used with LAMMPS' `pair_style table` command.
     ///
     /// For a given `temperature`, `n` values between `r_min` and `r_max` (both including) are tabulated.
@@ -337,23 +372,15 @@ impl SaftVRQMieParameters {
     /// - "hydrogen_neon_30K.table" for H-Ne interactions.
     pub fn lammps_tables(
         &self,
-        temperature: SINumber,
+        temperature: Temperature,
         n: usize,
-        r_min: SINumber,
-        r_max: SINumber,
+        r_min: Length,
+        r_max: Length,
     ) -> std::io::Result<()> {
-        let t = temperature.to_reduced(KELVIN).unwrap();
-        let rs = Array1::linspace(
-            r_min.to_reduced(ANGSTROM).unwrap(),
-            r_max.to_reduced(ANGSTROM).unwrap(),
-            n,
-        );
-        let energy_conversion = (KELVIN * RGAS / (KILO * CALORIE / MOL))
-            .into_value()
-            .unwrap();
-        let force_conversion = (KELVIN * RGAS / (KILO * CALORIE / MOL))
-            .into_value()
-            .unwrap();
+        let t = temperature.to_reduced();
+        let rs = Array1::linspace(r_min.to_reduced(), r_max.to_reduced(), n);
+        let energy_conversion = (KELVIN * RGAS / (KILO * CALORIE / MOL)).into_value();
+        let force_conversion = (KELVIN * RGAS / (KILO * CALORIE / MOL)).into_value();
 
         let n_components = self.sigma.len();
         for i in 0..n_components {

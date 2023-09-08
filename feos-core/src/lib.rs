@@ -4,9 +4,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(deprecated)]
 
-use quantity::si::*;
-use quantity::*;
-
 /// Print messages with level `Verbosity::Iter` or higher.
 #[macro_export]
 macro_rules! log_iter {
@@ -34,15 +31,19 @@ mod errors;
 pub mod joback;
 pub mod parameter;
 mod phase_equilibria;
+pub mod si;
 mod state;
 pub use equation_of_state::{
     Components, DeBroglieWavelength, DeBroglieWavelengthDual, EntropyScaling, EquationOfState,
-    HelmholtzEnergy, HelmholtzEnergyDual, IdealGas, MolarWeight, Residual,
+    HelmholtzEnergy, HelmholtzEnergyDual, IdealGas, Residual,
 };
 pub use errors::{EosError, EosResult};
-pub use phase_equilibria::{PhaseDiagram, PhaseDiagramHetero, PhaseEquilibrium};
+pub use phase_equilibria::{
+    PhaseDiagram, PhaseDiagramHetero, PhaseEquilibrium, TemperatureOrPressure,
+};
 pub use state::{
     Contributions, DensityInitialization, Derivative, State, StateBuilder, StateHD, StateVec,
+    TPSpec,
 };
 
 #[cfg(feature = "python")]
@@ -119,90 +120,17 @@ impl SolverOptions {
     }
 }
 
-/// Consistent conversions between quantities and reduced properties.
-pub trait EosUnit: Unit + Send + Sync {
-    fn reference_temperature() -> QuantityScalar<Self>;
-    fn reference_length() -> QuantityScalar<Self>;
-    fn reference_density() -> QuantityScalar<Self>;
-    fn reference_time() -> QuantityScalar<Self>;
-    fn gas_constant() -> QuantityScalar<Self>;
-    fn reference_volume() -> QuantityScalar<Self> {
-        Self::reference_length().powi(3)
-    }
-    fn reference_velocity() -> QuantityScalar<Self> {
-        Self::reference_length() / Self::reference_time()
-    }
-    fn reference_moles() -> QuantityScalar<Self> {
-        Self::reference_density() * Self::reference_volume()
-    }
-    fn reference_mass() -> QuantityScalar<Self> {
-        Self::reference_energy() * Self::reference_velocity().powi(-2)
-    }
-    fn reference_energy() -> QuantityScalar<Self> {
-        Self::gas_constant() * Self::reference_temperature() * Self::reference_moles()
-    }
-    fn reference_pressure() -> QuantityScalar<Self> {
-        Self::reference_energy() / Self::reference_volume()
-    }
-    fn reference_entropy() -> QuantityScalar<Self> {
-        Self::reference_energy() / Self::reference_temperature()
-    }
-    fn reference_molar_energy() -> QuantityScalar<Self> {
-        Self::reference_energy() / Self::reference_moles()
-    }
-    fn reference_molar_entropy() -> QuantityScalar<Self> {
-        Self::reference_entropy() / Self::reference_moles()
-    }
-    fn reference_surface_tension() -> QuantityScalar<Self> {
-        Self::reference_pressure() * Self::reference_length()
-    }
-    fn reference_influence_parameter() -> QuantityScalar<Self> {
-        Self::reference_temperature() * Self::gas_constant() * Self::reference_length().powi(2)
-            / Self::reference_density()
-    }
-    fn reference_molar_mass() -> QuantityScalar<Self> {
-        Self::reference_mass() / Self::reference_moles()
-    }
-    fn reference_viscosity() -> QuantityScalar<Self> {
-        Self::reference_pressure() * Self::reference_time()
-    }
-    fn reference_diffusion() -> QuantityScalar<Self> {
-        Self::reference_length().powi(2) / Self::reference_time()
-    }
-    fn reference_momentum() -> QuantityScalar<Self> {
-        Self::reference_molar_mass() * Self::reference_density() * Self::reference_velocity()
-    }
-}
-
-impl EosUnit for SIUnit {
-    fn reference_temperature() -> SINumber {
-        KELVIN
-    }
-    fn reference_length() -> SINumber {
-        ANGSTROM
-    }
-    fn reference_density() -> SINumber {
-        ANGSTROM.powi(-3) / NAV
-    }
-    fn reference_time() -> SINumber {
-        PICO * SECOND
-    }
-    fn gas_constant() -> SINumber {
-        RGAS
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cubic::*;
     use crate::equation_of_state::EquationOfState;
     use crate::joback::{Joback, JobackParameters, JobackRecord};
     use crate::parameter::*;
+    use crate::si::{BAR, KELVIN, MOL, RGAS};
     use crate::Contributions;
     use crate::EosResult;
     use crate::StateBuilder;
     use approx::*;
-    use quantity::si::*;
     use std::sync::Arc;
 
     fn pure_record_vec() -> Vec<PureRecord<PengRobinsonRecord>> {
@@ -260,11 +188,13 @@ mod tests {
         let sr = StateBuilder::new(&residual)
             .temperature(300.0 * KELVIN)
             .pressure(1.0 * BAR)
+            .total_moles(2.0 * MOL)
             .build()?;
 
         let s = StateBuilder::new(&eos)
             .temperature(300.0 * KELVIN)
             .pressure(1.0 * BAR)
+            .total_moles(2.0 * MOL)
             .build()?;
 
         // pressure
@@ -296,8 +226,18 @@ mod tests {
             max_relative = 1e-15
         );
         assert_relative_eq!(
+            s.molar_helmholtz_energy(Contributions::Residual),
+            sr.residual_molar_helmholtz_energy(),
+            max_relative = 1e-15
+        );
+        assert_relative_eq!(
             s.entropy(Contributions::Residual),
             sr.residual_entropy(),
+            max_relative = 1e-15
+        );
+        assert_relative_eq!(
+            s.molar_entropy(Contributions::Residual),
+            sr.residual_molar_entropy(),
             max_relative = 1e-15
         );
         assert_relative_eq!(
@@ -306,13 +246,33 @@ mod tests {
             max_relative = 1e-15
         );
         assert_relative_eq!(
+            s.molar_enthalpy(Contributions::Residual),
+            sr.residual_molar_enthalpy(),
+            max_relative = 1e-15
+        );
+        assert_relative_eq!(
             s.internal_energy(Contributions::Residual),
             sr.residual_internal_energy(),
             max_relative = 1e-15
         );
         assert_relative_eq!(
-            s.gibbs_energy(Contributions::Residual),
+            s.molar_internal_energy(Contributions::Residual),
+            sr.residual_molar_internal_energy(),
+            max_relative = 1e-15
+        );
+        assert_relative_eq!(
+            s.gibbs_energy(Contributions::Residual)
+                - s.total_moles
+                    * RGAS
+                    * s.temperature
+                    * s.compressibility(Contributions::Total).ln(),
             sr.residual_gibbs_energy(),
+            max_relative = 1e-15
+        );
+        assert_relative_eq!(
+            s.molar_gibbs_energy(Contributions::Residual)
+                - RGAS * s.temperature * s.compressibility(Contributions::Total).ln(),
+            sr.residual_molar_gibbs_energy(),
             max_relative = 1e-15
         );
         assert_relative_eq!(
@@ -425,8 +385,8 @@ mod tests {
 
         // residual properties using multiple derivatives
         assert_relative_eq!(
-            s.c_v(Contributions::Residual),
-            sr.c_v_res(),
+            s.molar_isochoric_heat_capacity(Contributions::Residual),
+            sr.residual_molar_isochoric_heat_capacity(),
             max_relative = 1e-15
         );
         assert_relative_eq!(
@@ -434,16 +394,10 @@ mod tests {
             sr.dc_v_res_dt(),
             max_relative = 1e-15
         );
-        println!(
-            "{}\n{}\n{}",
-            s.c_p(Contributions::Residual),
-            s.c_p(Contributions::IdealGas),
-            s.c_p(Contributions::Total)
-        );
         assert_relative_eq!(
-            s.c_p(Contributions::Residual),
-            sr.c_p_res(),
-            max_relative = 1e-14
+            s.molar_isobaric_heat_capacity(Contributions::Residual),
+            sr.residual_molar_isobaric_heat_capacity(),
+            max_relative = 1e-15
         );
         Ok(())
     }

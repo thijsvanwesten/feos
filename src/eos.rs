@@ -12,10 +12,10 @@ use feos_core::cubic::PengRobinson;
 use feos_core::joback::Joback;
 #[cfg(feature = "python")]
 use feos_core::python::user_defined::{PyIdealGas, PyResidual};
+use feos_core::si::*;
 use feos_core::*;
 use feos_derive::{Components, IdealGas, Residual};
 use ndarray::Array1;
-use quantity::si::*;
 
 /// Collection of different [EquationOfState] implementations.
 ///
@@ -24,23 +24,18 @@ use quantity::si::*;
 #[derive(Components, Residual)]
 pub enum ResidualModel {
     #[cfg(feature = "pcsaft")]
-    #[implement(entropy_scaling, molar_weight)]
+    #[implement(entropy_scaling)]
     PcSaft(PcSaft),
     #[cfg(feature = "gc_pcsaft")]
-    #[implement(molar_weight)]
     GcPcSaft(GcPcSaft),
-    #[implement(molar_weight)]
     PengRobinson(PengRobinson),
     #[cfg(feature = "python")]
-    #[implement(molar_weight)]
     Python(PyResidual),
     #[cfg(feature = "saftvrqmie")]
-    #[implement(molar_weight)]
+    #[implement(entropy_scaling)]
     SaftVRQMie(SaftVRQMie),
     #[cfg(feature = "pets")]
-    #[implement(molar_weight)]
     Pets(Pets),
-    #[implement(molar_weight)]
     #[cfg(feature = "uvtheory")]
     UVTheory(UVTheory),
 }

@@ -22,6 +22,7 @@ use crate::saftvrqmie::python::PySaftVRQMieParameters;
 use crate::saftvrqmie::{SaftVRQMieFunctional, SaftVRQMieOptions};
 
 use crate::eos::IdealGasModel;
+use feos_core::si::*;
 use feos_core::*;
 use feos_dft::adsorption::*;
 use feos_dft::interface::*;
@@ -29,15 +30,16 @@ use feos_dft::python::*;
 use feos_dft::solvation::*;
 use feos_dft::*;
 use numpy::convert::ToPyArray;
-use numpy::{PyArray1, PyArray2, PyArray4};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArray4};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
 #[cfg(feature = "estimator")]
 use pyo3::wrap_pymodule;
-use quantity::python::{PySIArray1, PySIArray2, PySIArray3, PySIArray4, PySINumber};
-use quantity::si::*;
+use quantity::python::{PyAngle, PySIArray1, PySIArray2, PySIArray3, PySIArray4, PySINumber};
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
+use typenum::P3;
 
 type Functional = EquationOfState<IdealGasModel, FunctionalVariant>;
 
@@ -228,7 +230,6 @@ impl PyFunctionalVariant {
 impl_equation_of_state!(PyFunctionalVariant);
 
 impl_state!(DFT<Functional>, PyFunctionalVariant);
-impl_state_molarweight!(DFT<Functional>, PyFunctionalVariant);
 impl_phase_equilibrium!(DFT<Functional>, PyFunctionalVariant);
 
 impl_planar_interface!(Functional);
@@ -258,6 +259,7 @@ pub fn dft(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyPlanarInterface>()?;
     m.add_class::<Geometry>()?;
     m.add_class::<PyPore1D>()?;
+    m.add_class::<PyPore2D>()?;
     m.add_class::<PyPore3D>()?;
     m.add_class::<PyPairCorrelation>()?;
     m.add_class::<PyExternalPotential>()?;

@@ -3,12 +3,12 @@
 
 use super::parameters::UVParameters;
 use crate::association::Association;
-use feos_core::MolarWeight;
+use feos_core::si::{MolarWeight, GRAM, MOL};
 use feos_core::{parameter::Parameter, Components, EosError, EosResult, HelmholtzEnergy, Residual};
 use ndarray::Array1;
-use quantity::si::*;
 use std::f64::consts::FRAC_PI_6;
 use std::sync::Arc;
+use typenum::P3;
 pub(crate) mod attractive_perturbation_bh;
 pub(crate) mod attractive_perturbation_uvb3;
 pub(crate) mod attractive_perturbation_wca;
@@ -35,7 +35,7 @@ use reference_perturbation_uvb3::ReferencePerturbationUVB3;
 use reference_perturbation_wca::ReferencePerturbationWCA;
 
 /// Type of Combination Rule.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[cfg_attr(feature = "python", pyo3::pyclass)]
 pub enum CombinationRule {
     ArithmeticPhi,
@@ -225,13 +225,16 @@ impl Residual for UVTheory {
     fn contributions(&self) -> &[Box<dyn HelmholtzEnergy>] {
         &self.contributions
     }
-}
-
-impl MolarWeight for UVTheory {
-    fn molar_weight(&self) -> SIArray1 {
+    fn molar_weight(&self) -> MolarWeight<Array1<f64>> {
         self.parameters.molarweight.clone() * GRAM / MOL
     }
 }
+
+// impl MolarWeight for UVTheory {
+//     fn molar_weight(&self) -> SIArray1 {
+//         self.parameters.molarweight.clone() * GRAM / MOL
+//     }
+// }
 
 #[cfg(test)]
 mod test {
@@ -241,9 +244,10 @@ mod test {
     use crate::uvtheory::parameters::*;
     use approx::assert_relative_eq;
     use feos_core::parameter::{Identifier, Parameter, PureRecord};
+    use feos_core::si::{ANGSTROM, KELVIN, MOL, NAV, RGAS};
     use feos_core::State;
     use ndarray::arr1;
-    use quantity::si::{ANGSTROM, KB, KELVIN, MOL, NAV, RGAS};
+    use typenum::P3;
 
     #[test]
     fn helmholtz_energy_pure_bh_contributions() -> EosResult<()> {
@@ -268,7 +272,7 @@ mod test {
         let s = State::new_nvt(
             &eos,
             reduced_temperature * p.epsilon_k[0] * KELVIN,
-            reduced_volume * (p.sigma[0] * ANGSTROM).powi(3),
+            reduced_volume * (p.sigma[0] * ANGSTROM).powi::<P3>(),
             &m,
         )?;
         let contributions = s.residual_helmholtz_energy_contributions();
@@ -278,20 +282,18 @@ mod test {
             reduced_temperature, reduced_density, p.m[0], p.sigma[0], p.epsilon_k[0]
         );
         for (name, value) in contributions.iter() {
-            let a_red = value.to_reduced(RGAS * s.temperature * s.total_moles)?;
+            let a_red = (value / (RGAS * s.temperature * s.total_moles)).into_value(); //value.to_reduced(RGAS * s.temperature * s.total_moles)?;
             println!("{:<30}: A / NkT = {:>.10}", &name, a_red);
             // dbg!(&name, value);
         }
         println!(
             "{:<30}: A / NkT = {:>.10}",
             "Total",
-            s.residual_helmholtz_energy()
-                .to_reduced(RGAS * s.temperature * s.total_moles)?
+            (s.residual_helmholtz_energy() / (RGAS * s.temperature * s.total_moles)).into_value() // s.residual_helmholtz_energy()
+                                                                                                  //     .to_reduced(RGAS * s.temperature * s.total_moles)?
         );
 
-        let a = (s.residual_helmholtz_energy() / s.total_moles)
-            .to_reduced(RGAS * s.temperature)
-            .unwrap();
+        let a = (s.residual_helmholtz_energy() / s.total_moles / RGAS / s.temperature).into_value();
         assert_relative_eq!(a, -0.025994839368858807, max_relative = 1e-12); //wca
                                                                              //assert_relative_eq!(atot, -0.0259948394, max_relative = 1e-12);
         Ok(())
@@ -326,7 +328,7 @@ mod test {
         let s = State::new_nvt(
             &eos,
             reduced_temperature * p.epsilon_k[0] * KELVIN,
-            reduced_volume * (p.sigma[0] * ANGSTROM).powi(3),
+            reduced_volume * (p.sigma[0] * ANGSTROM).powi::<P3>(),
             &m,
         )?;
 
@@ -337,15 +339,14 @@ mod test {
             reduced_temperature, reduced_density, p.m[0], p.sigma[0], p.epsilon_k[0]
         );
         for (name, value) in contributions.iter() {
-            let a_red = value.to_reduced(RGAS * s.temperature * s.total_moles)?;
+            let a_red = (value / (RGAS * s.temperature * s.total_moles)).into_value();
             println!("{:<30}: A / NkT = {:>.10}", &name, a_red);
             // dbg!(&name, value);
         }
         println!(
             "{:<30}: A / NkT = {:>.10}",
             "Total",
-            s.residual_helmholtz_energy()
-                .to_reduced(RGAS * s.temperature * s.total_moles)?
+            (s.residual_helmholtz_energy() / (RGAS * s.temperature * s.total_moles)).into_value()
         );
         assert!(1 == 2);
         Ok(())
@@ -362,11 +363,10 @@ mod test {
         let reduced_density = 1.0;
         let temperature = reduced_temperature * eps_k * KELVIN;
         let moles = arr1(&[2.0]) * MOL;
-        let volume = (sig * ANGSTROM).powi(3) / reduced_density * NAV * 2.0 * MOL;
+        let volume = (sig * ANGSTROM).powi::<P3>() / reduced_density * NAV * 2.0 * MOL;
         let s = State::new_nvt(&eos, temperature, volume, &moles).unwrap();
-        let a = (s.residual_helmholtz_energy() / s.total_moles)
-            .to_reduced(RGAS * temperature)
-            .unwrap();
+        let a =
+            ((s.residual_helmholtz_energy() / s.total_moles) / (RGAS * temperature)).into_value();
         assert_relative_eq!(a, 2.972986567516, max_relative = 1e-12); //wca
         Ok(())
     }
@@ -393,12 +393,10 @@ mod test {
         let reduced_density = 1.0;
         let temperature = reduced_temperature * eps_k * KELVIN;
         let moles = arr1(&[2.0]) * MOL;
-        let volume = (sig * ANGSTROM).powi(3) / reduced_density * NAV * 2.0 * MOL;
+        let volume = (sig * ANGSTROM).powi::<P3>() / reduced_density * NAV * 2.0 * MOL;
         let s = State::new_nvt(&eos, temperature, volume, &moles).unwrap();
 
-        let a = (s.residual_helmholtz_energy() / s.total_moles)
-            .to_reduced(RGAS * temperature)
-            .unwrap();
+        let a = (s.residual_helmholtz_energy() / s.total_moles / RGAS / temperature).into_value();
 
         //assert_relative_eq!(a, 2.993577305779432, max_relative = 1e-12); //Monomer Verison
         assert_relative_eq!(a, 2.8835102086093167, max_relative = 1e-12);
@@ -427,12 +425,9 @@ mod test {
         let reduced_density = 0.5;
         let temperature = reduced_temperature * eps_k * KELVIN;
         let moles = arr1(&[2.0]) * MOL;
-        let volume = (sig * ANGSTROM).powi(3) / reduced_density * NAV * 2.0 * MOL;
+        let volume = (sig * ANGSTROM).powi::<P3>() / reduced_density * NAV * 2.0 * MOL;
         let s = State::new_nvt(&eos, temperature, volume, &moles).unwrap();
-        let a = s
-            .residual_helmholtz_energy()
-            .to_reduced(RGAS * temperature * s.total_moles)
-            .unwrap();
+        let a = (s.residual_helmholtz_energy() / (RGAS * temperature * s.total_moles)).into_value();
         dbg!(a);
         assert_relative_eq!(a, 0.37659379124271003, max_relative = 1e-12);
         Ok(())
@@ -471,7 +466,7 @@ mod test {
         let reduced_density = 1.0;
         let moles = arr1(&[1.7, 0.3]) * MOL;
         let total_moles = moles.sum();
-        let volume = (sig_x * ANGSTROM).powi(3) / reduced_density * NAV * total_moles;
+        let volume = (sig_x * ANGSTROM).powi::<P3>() / reduced_density * NAV * total_moles;
 
         // EoS
         let options = UVTheoryOptions {
@@ -487,10 +482,8 @@ mod test {
         let eos_bh = Arc::new(UVTheory::with_options(Arc::new(uv_parameters), options)?);
 
         let state_bh = State::new_nvt(&eos_bh, t_x, volume, &moles).unwrap();
-        let a_bh = state_bh
-            .residual_helmholtz_energy()
-            .to_reduced(RGAS * t_x * state_bh.total_moles)
-            .unwrap();
+        let a_bh = (state_bh.residual_helmholtz_energy() / (RGAS * t_x * state_bh.total_moles))
+            .into_value();
 
         assert_relative_eq!(a_bh, 2.993577305779432, max_relative = 1e-12);
         Ok(())
@@ -512,20 +505,50 @@ mod test {
         let reduced_density = 0.9;
         let moles = arr1(&[0.4, 0.6]) * MOL;
         let total_moles = moles.sum();
-        let volume = (p.sigma[0] * ANGSTROM).powi(3) / reduced_density * NAV * total_moles;
+        let volume = (p.sigma[0] * ANGSTROM).powi::<P3>() / reduced_density * NAV * total_moles;
 
         // EoS
         let eos_wca = Arc::new(UVTheory::new(Arc::new(p))?);
         let state_wca = State::new_nvt(&eos_wca, t_x, volume, &moles).unwrap();
-        let a_wca = state_wca
-            .residual_helmholtz_energy()
-            .to_reduced(RGAS * t_x * state_wca.total_moles)
-            .unwrap();
-
+        // let a_wca = state_wca
+        //     .residual_helmholtz_energy()
+        //     .to_reduced(RGAS * t_x * state_wca.total_moles)
+        //     .unwrap();
+        let a_wca = (state_wca.residual_molar_helmholtz_energy() / (RGAS * state_wca.temperature))
+            .into_value();
         assert_relative_eq!(a_wca, -0.597791038364405, max_relative = 1e-5);
         Ok(())
     }
 
+    // #[test]
+    // fn helmholtz_energy_wca_mixture_different_sigma() -> EosResult<()> {
+    //     let p = test_parameters_mixture(
+    //         arr1(&[1.0, 1.0]),
+    //         arr1(&[12.0, 12.0]),
+    //         arr1(&[6.0, 6.0]),
+    //         arr1(&[1.0, 2.0]),
+    //         arr1(&[1.0, 0.5]),
+    //     );
+
+    //     // state
+    //     let reduced_temperature = 1.5;
+    //     let t_x = reduced_temperature * p.epsilon_k[0] * KELVIN;
+    //     let sigma_x_3 = (0.4 + 0.6 * 8.0) * ANGSTROM.powi(3);
+    //     let density = 0.52000000000000002 / sigma_x_3;
+    //     let moles = arr1(&[0.4, 0.6]) * MOL;
+    //     let total_moles = moles.sum();
+    //     let volume = NAV * total_moles / density;
+
+    //     // EoS
+    //     let eos_wca = Arc::new(UVTheory::new(Arc::new(p))?);
+    //     let state_wca = State::new_nvt(&eos_wca, t_x, volume, &moles).unwrap();
+    //     let a_wca = state_wca
+    //         .residual_helmholtz_energy()
+    //         .to_reduced(RGAS * t_x * state_wca.total_moles)
+    //         .unwrap();
+    //     assert_relative_eq!(a_wca, -0.034206207363139396, max_relative = 1e-5);
+    //     Ok(())
+    // }
     #[test]
     fn helmholtz_energy_wca_mixture_different_sigma() -> EosResult<()> {
         let p = test_parameters_mixture(
@@ -539,7 +562,7 @@ mod test {
         // state
         let reduced_temperature = 1.5;
         let t_x = reduced_temperature * p.epsilon_k[0] * KELVIN;
-        let sigma_x_3 = (0.4 + 0.6 * 8.0) * ANGSTROM.powi(3);
+        let sigma_x_3 = (0.4 + 0.6 * 8.0) * ANGSTROM.powi::<P3>();
         let density = 0.52000000000000002 / sigma_x_3;
         let moles = arr1(&[0.4, 0.6]) * MOL;
         let total_moles = moles.sum();
@@ -548,10 +571,7 @@ mod test {
         // EoS
         let eos_wca = Arc::new(UVTheory::new(Arc::new(p))?);
         let state_wca = State::new_nvt(&eos_wca, t_x, volume, &moles).unwrap();
-        let a_wca = state_wca
-            .residual_helmholtz_energy()
-            .to_reduced(RGAS * t_x * state_wca.total_moles)
-            .unwrap();
+        let a_wca = (state_wca.residual_molar_helmholtz_energy() / (RGAS * t_x)).into_value();
         assert_relative_eq!(a_wca, -0.034206207363139396, max_relative = 1e-5);
         Ok(())
     }

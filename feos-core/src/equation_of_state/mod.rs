@@ -1,6 +1,8 @@
-use crate::EosResult;
+use crate::{
+    si::{Diffusivity, MolarWeight, Moles, Temperature, ThermalConductivity, Viscosity, Volume},
+    EosResult,
+};
 use ndarray::Array1;
-use quantity::si::{SIArray1, SINumber};
 use std::sync::Arc;
 
 mod helmholtz_energy;
@@ -10,14 +12,6 @@ mod residual;
 pub use helmholtz_energy::{HelmholtzEnergy, HelmholtzEnergyDual};
 pub use ideal_gas::{DeBroglieWavelength, DeBroglieWavelengthDual, IdealGas};
 pub use residual::{EntropyScaling, Residual};
-
-/// Molar weight of all components.
-///
-/// The trait is required to be able to calculate (mass)
-/// specific properties.
-pub trait MolarWeight {
-    fn molar_weight(&self) -> SIArray1;
-}
 
 /// The number of components that the model is initialized for.
 pub trait Components {
@@ -80,10 +74,8 @@ impl<I: IdealGas, R: Residual> Residual for EquationOfState<I, R> {
     fn contributions(&self) -> &[Box<dyn HelmholtzEnergy>] {
         self.residual.contributions()
     }
-}
 
-impl<I, R: MolarWeight> MolarWeight for EquationOfState<I, R> {
-    fn molar_weight(&self) -> SIArray1 {
+    fn molar_weight(&self) -> MolarWeight<Array1<f64>> {
         self.residual.molar_weight()
     }
 }
@@ -91,10 +83,10 @@ impl<I, R: MolarWeight> MolarWeight for EquationOfState<I, R> {
 impl<I: IdealGas, R: Residual + EntropyScaling> EntropyScaling for EquationOfState<I, R> {
     fn viscosity_reference(
         &self,
-        temperature: SINumber,
-        volume: SINumber,
-        moles: &SIArray1,
-    ) -> EosResult<SINumber> {
+        temperature: Temperature,
+        volume: Volume,
+        moles: &Moles<Array1<f64>>,
+    ) -> EosResult<Viscosity> {
         self.residual
             .viscosity_reference(temperature, volume, moles)
     }
@@ -103,10 +95,10 @@ impl<I: IdealGas, R: Residual + EntropyScaling> EntropyScaling for EquationOfSta
     }
     fn diffusion_reference(
         &self,
-        temperature: SINumber,
-        volume: SINumber,
-        moles: &SIArray1,
-    ) -> EosResult<SINumber> {
+        temperature: Temperature,
+        volume: Volume,
+        moles: &Moles<Array1<f64>>,
+    ) -> EosResult<Diffusivity> {
         self.residual
             .diffusion_reference(temperature, volume, moles)
     }
@@ -115,10 +107,10 @@ impl<I: IdealGas, R: Residual + EntropyScaling> EntropyScaling for EquationOfSta
     }
     fn thermal_conductivity_reference(
         &self,
-        temperature: SINumber,
-        volume: SINumber,
-        moles: &SIArray1,
-    ) -> EosResult<SINumber> {
+        temperature: Temperature,
+        volume: Volume,
+        moles: &Moles<Array1<f64>>,
+    ) -> EosResult<ThermalConductivity> {
         self.residual
             .thermal_conductivity_reference(temperature, volume, moles)
     }

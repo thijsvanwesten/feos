@@ -2,13 +2,14 @@ use crate::association::{AssociationParameters, AssociationRecord, BinaryAssocia
 use crate::hard_sphere::{HardSphereProperties, MonomerShape};
 use feos_core::parameter::{Identifier, ParameterError};
 use feos_core::parameter::{Parameter, PureRecord};
+use feos_core::si::{JOULE, KB, KELVIN};
 use lazy_static::lazy_static;
 use ndarray::concatenate;
 use ndarray::prelude::*;
 use ndarray::Array2;
 use num_dual::DualNum;
 use num_traits::Zero;
-use quantity::si::{JOULE, KB, KELVIN};
+//use quantity::si::{JOULE, KB, KELVIN};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -257,10 +258,10 @@ impl Parameter for UVParameters {
         }
         let mu2 = &mu * &mu / (&m * &sigma * &sigma * &sigma * &epsilon_k)
             * 1e-19
-            * (JOULE / KELVIN / KB).into_value().unwrap();
+            * (JOULE / KELVIN / KB).into_value();
         let q2 = &q * &q / (&m * &sigma.mapv(|s| s.powi(5)) * &epsilon_k)
             * 1e-19
-            * (JOULE / KELVIN / KB).into_value().unwrap();
+            * (JOULE / KELVIN / KB).into_value();
         let dipole_comp: Array1<usize> = mu2
             .iter()
             .enumerate()

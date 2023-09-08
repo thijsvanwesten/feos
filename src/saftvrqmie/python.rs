@@ -15,10 +15,35 @@ use quantity::python::PySINumber;
 use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
-/// Create a set of Saft-VRQ Mie parameters from records.
+/// Pure-substance parameters for the Saft-VRQ Mie equation of state.
+///
+/// Parameters
+/// ----------
+/// m : float
+///     Segment number
+/// sigma : float
+///     Structure parameter of the Mie potential in units of
+///     Angstrom.
+/// epsilon_k : float
+///     Energetic parameter of the Mie potential in units of
+///     Kelvin.
+/// lr : float
+///     Repulsive exponent of the Mie potential.
+/// la : float
+///     Attractive exponent of the Mie potential.
+/// fh : int
+///     Feynman-Hibbs order. One of {0, 1, 2}.
+///     `fh = 0` disables quantum corrections so that effectively,
+///     the SAFT-VR Mie equation of state is used.
+/// viscosity : List[float], optional
+///     Entropy-scaling parameters for viscosity. Defaults to `None`.
+/// diffusion : List[float], optional
+///     Entropy-scaling parameters for diffusion. Defaults to `None`.
+/// thermal_conductivity : List[float], optional
+///     Entropy-scaling parameters for thermal_conductivity. Defaults to `None`.
 #[pyclass(name = "SaftVRQMieRecord")]
 #[pyo3(
-    text_signature = "(m, sigma, epsilon_k, viscosity=None, diffusion=None, thermal_conductivity=None)"
+    text_signature = "(m, sigma, epsilon_k, lr, la, fh, viscosity=None, diffusion=None, thermal_conductivity=None)"
 )]
 #[derive(Clone)]
 pub struct PySaftVRQMieRecord(SaftVRQMieRecord);
@@ -34,10 +59,20 @@ impl PySaftVRQMieRecord {
         la: f64,
         fh: usize,
         viscosity: Option<[f64; 4]>,
-    ) -> Self {
-        Self(SaftVRQMieRecord::new(
-            m, sigma, epsilon_k, lr, la, fh, viscosity, None, None,
-        ))
+        diffusion: Option<[f64; 5]>,
+        thermal_conductivity: Option<[f64; 4]>,
+    ) -> PyResult<Self> {
+        Ok(Self(SaftVRQMieRecord::new(
+            m,
+            sigma,
+            epsilon_k,
+            lr,
+            la,
+            fh,
+            viscosity,
+            diffusion,
+            thermal_conductivity,
+        )?))
     }
 
     #[getter]
@@ -165,6 +200,46 @@ impl PySaftVRQMieParameters {
     fn get_l_ij<'py>(&self, py: Python<'py>) -> &'py PyArray2<f64> {
         self.0.l_ij.view().to_pyarray(py)
     }
+    /// Create SAFT VRQ Mie parameters for pure substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m: float
+    ///     Chain Length
+    /// rep : float
+    ///     repulsive exponents
+    /// att : float
+    ///     attractive exponents
+    /// sigma : float
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : float
+    ///     Mie energy parameter in units of Kelvin
+    ///mw: float
+    ///     Molar Weight in g/mol
+    /// fh: int
+    ///     Order of Feynman Hibbs Correction
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(text_signature = "(m, rep, att, sigma, epsilon_k, mw, fh)")]
+    #[staticmethod]
+    fn new_simple(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        mw: f64,
+        fh: usize,
+    ) -> Self {
+        Self(Arc::new(SaftVRQMieParameters::new_simple(
+            m, rep, att, sigma, epsilon_k, mw, fh,
+        )))
+    }
 
     /// Generate energy and force tables to be used with LAMMPS' `pair_style table` command.
     ///
@@ -210,7 +285,12 @@ impl PySaftVRQMieParameters {
         r_max: PySINumber,
     ) -> PyResult<()> {
         self.0
-            .lammps_tables(temperature.into(), n, r_min.into(), r_max.into())
+            .lammps_tables(
+                temperature.try_into()?,
+                n,
+                r_min.try_into()?,
+                r_max.try_into()?,
+            )
             .map_err(PyIOError::new_err)
     }
 

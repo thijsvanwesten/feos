@@ -1,3 +1,4 @@
+use feos_core::si::MolarWeight;
 use feos_core::{Components, EosResult};
 use feos_dft::adsorption::FluidParameters;
 use feos_dft::solvation::PairPotential;
@@ -351,6 +352,10 @@ impl HelmholtzEnergyFunctional for FMTFunctional {
 
     fn compute_max_density(&self, moles: &Array1<f64>) -> f64 {
         moles.sum() / (moles * &self.properties.sigma).sum() * 1.2
+    }
+
+    fn molar_weight(&self) -> MolarWeight<Array1<f64>> {
+        panic!("No mass specific properties are available for this model!")
     }
 
     fn molecule_shape(&self) -> MoleculeShape {

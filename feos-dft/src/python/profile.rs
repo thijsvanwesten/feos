@@ -49,7 +49,7 @@ macro_rules! impl_profile {
             $(
             #[getter]
             fn $ax(&self) -> PySIArray1 {
-                PySIArray1::from(self.0.profile.grid.grids()[$ind].clone() * SIUnit::reference_length())
+                PySIArray1::from(Length::from_reduced(self.0.profile.grid.grids()[$ind].clone()))
             })+
 
             #[getter]
@@ -240,9 +240,15 @@ macro_rules! impl_2d_profile {
         #[pymethods]
         impl $struct {
             #[getter]
-            fn get_edges(&self) -> (PySIArray1, PySIArray1) {
-                let (edge1, edge2) = self.0.profile.edges();
-                (edge1.into(), edge2.into())
+            fn get_edges(&self) -> [PySIArray1; 2] {
+                let [edge1, edge2] = self.0.profile.edges();
+                [edge1.into(), edge2.into()]
+            }
+
+            #[getter]
+            fn get_meshgrid(&self) -> [PySIArray2; 2] {
+                let [x, y] = self.0.profile.meshgrid();
+                [x.into(), y.into()]
             }
         }
     };
@@ -264,9 +270,15 @@ macro_rules! impl_3d_profile {
         #[pymethods]
         impl $struct {
             #[getter]
-            fn get_edges(&self) -> (PySIArray1, PySIArray1, PySIArray1) {
-                let (edge1, edge2, edge3) = self.0.profile.edges();
-                (edge1.into(), edge2.into(), edge3.into())
+            fn get_edges(&self) -> [PySIArray1; 3] {
+                let [edge1, edge2, edge3] = self.0.profile.edges();
+                [edge1.into(), edge2.into(), edge3.into()]
+            }
+
+            #[getter]
+            fn get_meshgrid(&self) -> [PySIArray3; 3] {
+                let [x, y, z] = self.0.profile.meshgrid();
+                [x.into(), y.into(), z.into()]
             }
         }
     };

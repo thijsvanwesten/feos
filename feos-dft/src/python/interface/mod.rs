@@ -45,10 +45,10 @@ macro_rules! impl_planar_interface {
                 let profile = PlanarInterface::from_tanh(
                     &vle.0,
                     n_grid,
-                    l_grid.into(),
-                    critical_temperature.into(),
+                    l_grid.try_into()?,
+                    critical_temperature.try_into()?,
                     fix_equimolar_surface.unwrap_or(false),
-                )?;
+                );
                 Ok(PyPlanarInterface(profile))
             }
 
@@ -100,8 +100,8 @@ macro_rules! impl_planar_interface {
                 l_grid: PySINumber,
                 density_profile: PySIArray2,
             ) -> PyResult<Self> {
-                let mut profile = PlanarInterface::new(&vle.0, n_grid, l_grid.into())?;
-                profile.profile.density = density_profile.into();
+                let mut profile = PlanarInterface::new(&vle.0, n_grid, l_grid.try_into()?);
+                profile.profile.density = density_profile.try_into()?;
                 Ok(PyPlanarInterface(profile))
             }
         }
@@ -133,8 +133,8 @@ macro_rules! impl_planar_interface {
             /// -------
             /// SIArray2
             ///
-            fn relative_adsorption(&self) -> PyResult<PySIArray2> {
-                Ok(self.0.relative_adsorption()?.into())
+            fn relative_adsorption(&self) -> PySIArray2 {
+                self.0.relative_adsorption().into()
             }
 
             /// Calculates the interfacial enrichment E_i.
@@ -143,8 +143,8 @@ macro_rules! impl_planar_interface {
             /// -------
             /// numpy.ndarray
             ///
-            fn interfacial_enrichment<'py>(&self, py: Python<'py>) -> PyResult<&'py PyArray1<f64>> {
-                Ok(self.0.interfacial_enrichment()?.to_pyarray(py))
+            fn interfacial_enrichment<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+                self.0.interfacial_enrichment().to_pyarray(py)
             }
 
             /// Calculates the interfacial thickness (90-10 number density difference)

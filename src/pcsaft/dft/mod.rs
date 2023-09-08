@@ -3,13 +3,13 @@ use crate::association::Association;
 use crate::hard_sphere::{FMTContribution, FMTVersion};
 use crate::pcsaft::eos::PcSaftOptions;
 use feos_core::parameter::Parameter;
-use feos_core::{Components, MolarWeight};
+use feos_core::si::{MolarWeight, GRAM, MOL};
+use feos_core::Components;
 use feos_dft::adsorption::FluidParameters;
 use feos_dft::solvation::PairPotential;
 use feos_dft::{FunctionalContribution, HelmholtzEnergyFunctional, MoleculeShape, DFT};
 use ndarray::{Array1, Array2};
 use num_traits::One;
-use quantity::si::*;
 use std::f64::consts::FRAC_PI_6;
 use std::sync::Arc;
 
@@ -123,10 +123,8 @@ impl HelmholtzEnergyFunctional for PcSaftFunctional {
     fn molecule_shape(&self) -> MoleculeShape {
         MoleculeShape::NonSpherical(&self.parameters.m)
     }
-}
 
-impl MolarWeight for PcSaftFunctional {
-    fn molar_weight(&self) -> SIArray1 {
+    fn molar_weight(&self) -> MolarWeight<Array1<f64>> {
         self.parameters.molarweight.clone() * GRAM / MOL
     }
 }

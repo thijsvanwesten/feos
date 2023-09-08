@@ -31,6 +31,7 @@ use feos_core::joback::Joback;
 use feos_core::python::cubic::PyPengRobinsonParameters;
 use feos_core::python::joback::PyJobackParameters;
 use feos_core::python::user_defined::{PyIdealGas, PyResidual};
+use feos_core::si::*;
 use feos_core::*;
 use numpy::convert::ToPyArray;
 use numpy::{PyArray1, PyArray2};
@@ -39,9 +40,10 @@ use pyo3::prelude::*;
 #[cfg(feature = "estimator")]
 use pyo3::wrap_pymodule;
 use quantity::python::{PySIArray1, PySIArray2, PySINumber};
-use quantity::si::*;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
+use typenum::P3;
 
 /// Collection of equations of state.
 #[pyclass(name = "EquationOfState")]
@@ -204,7 +206,7 @@ impl PyEquationOfState {
         Self(Arc::new(EquationOfState::new(ideal_gas, residual)))
     }
 
-   /// UV-Theory equation of state.
+    /// UV-Theory equation of state.
     ///
     /// Parameters
     /// ----------
@@ -217,11 +219,6 @@ impl PyEquationOfState {
     /// virial_order : VirialOrder, optional
     ///     Highest order of virial coefficient to consider.
     ///     Defaults to second order (original uv-theory).
-    /// combination_rule: CombinationRule, optional
-    /// max_iter_cross_assoc : unsigned integer, optional
-    ///     Maximum number of iterations for cross association. Defaults to 50.
-    /// tol_cross_assoc : float
-    ///     Tolerance for convergence of cross association. Defaults to 1e-10.
     ///
     /// Returns
     /// -------
@@ -242,7 +239,6 @@ impl PyEquationOfState {
         combination_rule:CombinationRule,
         max_iter_cross_assoc: usize,
         tol_cross_assoc: f64,
-        //dq_variant: DQVariants,
     ) -> PyResult<Self> {
         let options = UVTheoryOptions {
             max_eta,
@@ -251,17 +247,14 @@ impl PyEquationOfState {
             combination_rule,
             max_iter_cross_assoc,
             tol_cross_assoc,
-            //dq_variant,
         };
         let residual = Arc::new(ResidualModel::UVTheory(UVTheory::with_options(
             parameters.0,
             options,
         )?));
         let ideal_gas = Arc::new(IdealGasModel::NoModel(residual.components()));
-
         Ok(Self(Arc::new(EquationOfState::new(ideal_gas, residual))))
     }
-
 
     /// SAFT-VRQ Mie equation of state.
     ///
@@ -339,7 +332,6 @@ impl PyEquationOfState {
 impl_equation_of_state!(PyEquationOfState);
 impl_virial_coefficients!(PyEquationOfState);
 impl_state!(EquationOfState<IdealGasModel, ResidualModel>, PyEquationOfState);
-impl_state_molarweight!(EquationOfState<IdealGasModel, ResidualModel>, PyEquationOfState);
 impl_state_entropy_scaling!(EquationOfState<IdealGasModel, ResidualModel>, PyEquationOfState);
 impl_phase_equilibrium!(EquationOfState<IdealGasModel, ResidualModel>, PyEquationOfState);
 

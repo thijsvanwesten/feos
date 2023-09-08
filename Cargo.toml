@@ -1,19 +1,27 @@
 [package]
 name = "feos"
 version = "0.4.3"
-authors = ["Gernot Bauer <bauer@itt.uni-stuttgart.de>", "Philipp Rehner <prehner@ethz.ch>"]
+authors = [
+    "Gernot Bauer <bauer@itt.uni-stuttgart.de>",
+    "Philipp Rehner <prehner@ethz.ch>",
+]
 edition = "2018"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 description = "FeOs - A framework for equations of state and classical density functional theory."
 homepage = "https://github.com/feos-org"
 repository = "https://github.com/feos-org/feos"
-keywords = ["physics", "thermodynamics", "equations_of_state", "phase_equilibria"]
+keywords = [
+    "physics",
+    "thermodynamics",
+    "equations_of_state",
+    "phase_equilibria",
+]
 categories = ["science"]
 
 [package.metadata.docs.rs]
 features = ["all_models", "rayon"]
-rustdoc-args = [ "--html-in-header", "./docs-header.html" ]
+rustdoc-args = ["--html-in-header", "./docs-header.html"]
 
 [workspace]
 members = ["feos-core", "feos-dft", "feos-derive"]
@@ -22,7 +30,7 @@ members = ["feos-core", "feos-dft", "feos-derive"]
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-quantity = "0.6"
+quantity = { version = "0.6.2", optional = true }
 num-dual = "0.7"
 feos-core = { version = "0.4", path = "feos-core" }
 feos-dft = { version = "0.4", path = "feos-dft", optional = true }
@@ -39,6 +47,7 @@ lazy_static = { version = "1.4", optional = true }
 indexmap = "1.8"
 rayon = { version = "1.5", optional = true }
 itertools = "0.10"
+typenum = "1.16"
 
 [dependencies.pyo3]
 version = "0.18"
@@ -64,8 +73,23 @@ uvtheory = ["association", "lazy_static"]
 pets = []
 saftvrqmie = []
 rayon = ["dep:rayon", "ndarray/rayon", "feos-core/rayon", "feos-dft?/rayon"]
-python = ["pyo3", "numpy", "feos-core/python", "feos-dft?/python", "rayon"]
-all_models = ["dft", "estimator", "pcsaft", "gc_pcsaft", "uvtheory", "pets", "saftvrqmie"]
+python = [
+    "pyo3",
+    "numpy",
+    "quantity/python",
+    "feos-core/python",
+    "feos-dft?/python",
+    "rayon",
+]
+all_models = [
+    "dft",
+    "estimator",
+    "pcsaft",
+    "gc_pcsaft",
+    "uvtheory",
+    "pets",
+    "saftvrqmie",
+]
 
 [[bench]]
 name = "state_properties"

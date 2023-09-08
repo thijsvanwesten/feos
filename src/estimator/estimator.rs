@@ -3,7 +3,7 @@
 use super::{DataSet, EstimatorError, Loss};
 use feos_core::Residual;
 use ndarray::{arr1, concatenate, Array1, ArrayView1, Axis};
-use quantity::si::SIArray1;
+// use quantity::si::SIArray1;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Write;
@@ -53,7 +53,7 @@ impl<E: Residual> Estimator<E> {
     }
 
     /// Returns the properties as computed by the equation of state for each `DataSet`.
-    pub fn predict(&self, eos: &Arc<E>) -> Result<Vec<SIArray1>, EstimatorError> {
+    pub fn predict(&self, eos: &Arc<E>) -> Result<Vec<Array1<f64>>, EstimatorError> {
         self.data.iter().map(|d| d.predict(eos)).collect()
     }
 
