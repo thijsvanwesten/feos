@@ -26,11 +26,11 @@ impl fmt::Display for NoRecord {
 /// uv-theory parameters for a pure substance
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UVRecord {
-    m: f64,
-    rep: f64,
-    att: f64,
-    sigma: f64,
-    epsilon_k: f64,
+    pub m: f64,
+    pub rep: f64,
+    pub att: f64,
+    pub sigma: f64,
+    pub epsilon_k: f64,
     /// Association parameters
     #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -414,31 +414,73 @@ impl UVParameters {
     }
 
     /// Markdown representation of parameters.
+    // pub fn to_markdown(&self) -> String {
+    //     let mut output = String::new();
+    //     let o = &mut output;
+    //     write!(
+    //         o,
+    //         "|component|molarweight|$\\sigma$|$\\varepsilon$|$m$|$rep$|$att$|\n|-|-|-|-|-|-|"
+    //     )
+    //     .unwrap();
+    //     for i in 0..self.pure_records.len() {
+    //         let component = self.pure_records[i].identifier.name.clone();
+    //         let component = component.unwrap_or(format!("Component {}", i + 1));
+    //         write!(
+    //             o,
+    //             "\n|{}|{}|{}|{}|{}|{}|",
+    //             component,
+    //             self.molarweight[i],
+    //             self.sigma[i],
+    //             self.epsilon_k[i],
+    //             self.m[i]
+    //             self.rep[i],
+    //             self.att[i],
+    //         )
+    //         .unwrap();
+    //     }
+    //     output
+    // }
+
+
     pub fn to_markdown(&self) -> String {
         let mut output = String::new();
         let o = &mut output;
         write!(
             o,
-            "|component|molarweight|$\\sigma$|$\\varepsilon$|$m$|$n$|\n|-|-|-|-|-|-|"
+            "|component|molarweight|rep|att|$m$|$\\sigma$|$\\varepsilon$|$\\mu$|$Q$|$\\kappa_{{AB}}$|$\\varepsilon_{{AB}}$|$N_A$|$N_B$|$N_C$|\n|-|-|-|-|-|-|-|-|-|-|-|-|-|-|"
         )
         .unwrap();
-        for i in 0..self.pure_records.len() {
-            let component = self.pure_records[i].identifier.name.clone();
+        for (i, record) in self.pure_records.iter().enumerate() {
+            let component = record.identifier.name.clone();
             let component = component.unwrap_or(format!("Component {}", i + 1));
+            let association = record
+                .model_record
+                .association_record
+                .unwrap_or_else(|| AssociationRecord::new(0.0, 0.0, 0.0, 0.0, 0.0));
             write!(
                 o,
-                "\n|{}|{}|{}|{}|{}|{}|",
+                "\n|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|",
                 component,
-                self.molarweight[i],
-                self.sigma[i],
-                self.epsilon_k[i],
-                self.rep[i],
-                self.att[i],
+                record.molarweight,
+                record.model_record.rep,
+                record.model_record.att,
+                record.model_record.m,
+                record.model_record.sigma,
+                record.model_record.epsilon_k,
+                record.model_record.mu.unwrap_or(0.0),
+                record.model_record.q.unwrap_or(0.0),
+                association.kappa_ab,
+                association.epsilon_k_ab,
+                association.na,
+                association.nb,
+                association.nc
             )
             .unwrap();
         }
+
         output
     }
+
 }
 
 impl HardSphereProperties for UVParameters {

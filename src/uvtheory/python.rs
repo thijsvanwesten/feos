@@ -19,6 +19,9 @@ struct PyNoRecord(NoRecord);
 
 /// Create a set of UV Theory parameters from records.
 #[pyclass(name = "UVRecord")]
+#[pyo3(
+    text_signature = "(m, rep, att, sigma, epsilon_k, kappa_ab=None, epsilon_k_ab=None, na=None, nb=None,  mu=None, q=None)"
+)]
 #[derive(Clone)]
 pub struct PyUVRecord(UVRecord);
 
@@ -55,6 +58,67 @@ impl PyUVRecord {
         ))
     }
 
+    
+    #[getter]
+    fn get_m(&self) -> f64 {
+        self.0.m
+    }
+
+    #[getter]
+    fn get_sigma(&self) -> f64 {
+        self.0.sigma
+    }
+
+    #[getter]
+    fn get_epsilon_k(&self) -> f64 {
+        self.0.epsilon_k
+    }
+
+    #[getter]
+    fn get_rep(&self) -> f64 {
+        self.0.rep
+    }
+
+    #[getter]
+    fn get_att(&self) -> f64 {
+        self.0.att
+    }
+
+    #[getter]
+    fn get_mu(&self) -> Option<f64> {
+        self.0.mu
+    }
+
+    #[getter]
+    fn get_q(&self) -> Option<f64> {
+        self.0.q
+    }
+
+    #[getter]
+    fn get_kappa_ab(&self) -> Option<f64> {
+        self.0.association_record.map(|a| a.kappa_ab)
+    }
+
+    #[getter]
+    fn get_epsilon_k_ab(&self) -> Option<f64> {
+        self.0.association_record.map(|a| a.epsilon_k_ab)
+    }
+
+    #[getter]
+    fn get_na(&self) -> Option<f64> {
+        self.0.association_record.map(|a| a.na)
+    }
+
+    #[getter]
+    fn get_nb(&self) -> Option<f64> {
+        self.0.association_record.map(|a| a.nb)
+    }
+
+    #[getter]
+    fn get_nc(&self) -> Option<f64> {
+        self.0.association_record.map(|a| a.nc)
+    }
+
     fn __repr__(&self) -> PyResult<String> {
         Ok(self.0.to_string())
     }
@@ -85,6 +149,18 @@ impl_binary_record!(UVBinaryRecord, PyUVBinaryRecord);
 #[pyo3(text_signature = "(pure_records, binary_records, substances, search_option)")]
 #[derive(Clone)]
 pub struct PyUVParameters(pub Arc<UVParameters>);
+
+
+
+
+
+
+
+
+
+
+
+
 
 #[pymethods]
 impl PyUVParameters {
@@ -276,7 +352,21 @@ impl PyUVParameters {
             mw,
         )))
     }
+
+    #[getter]
+    fn get_k_ij<'py>(&self, py: Python<'py>) -> Option<&'py PyArray2<f64>> {
+        self.0
+            .binary_records
+            .as_ref()
+            .map(|br| br.map(|br| br.k_ij).view().to_pyarray(py))
+    }
+
+    fn _repr_markdown_(&self) -> String {
+        self.0.to_markdown()
+    }
 }
+
+
 
 impl_pure_record!(UVRecord, PyUVRecord);
 impl_parameter!(UVParameters, PyUVParameters, PyUVRecord, PyUVBinaryRecord);
