@@ -27,7 +27,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationWCA
         let x = &state.molefracs;
         let d = diameter_wca(p, state.temperature);
         //let q = diameter_q_wca(&p, state.temperature);
-        let eta = packing_fraction(&state.partial_density, &d);
+        let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let eta_a = packing_fraction_a(p, eta, state.temperature);
         let eta_b = packing_fraction_b(p, eta, state.temperature);
         let mut a = D::zero();

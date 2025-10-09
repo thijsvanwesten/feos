@@ -104,6 +104,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationWC
         let delta_b21u_x =
             (-mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0) / t_x * 2.0 * PI;
 
+        dbg!(t_x,rho_x,delta_a1u);
+
         for i in 0..p.ncomponents {
             let xi = x[i];
             let ufraction_i = u_fraction_wca(D::one() * p.rep[i], density * p.sigma[i].powi(3));
@@ -137,6 +139,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationWC
                 // Recheck mixing rule!
                 low_dens_corr +=
                     xi * x[j] * (db2_ij - delta_b21u_x) * p.sigma_ij[[i, j]].powi(3) * psi_ij;
+
+                dbg!(i,j,-psi_ij+1.0,db2_ij*p.sigma_ij[[i,j]].powi(3),delta_b21u_x*p.sigma_ij[[i,j]].powi(3));
             }
         }
 

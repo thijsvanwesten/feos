@@ -14,6 +14,7 @@ pub(crate) mod attractive_perturbation_uvb3;
 pub(crate) mod attractive_perturbation_wca;
 pub(crate) mod chain_bh_tptv;
 pub(crate) mod chain_bh_tpty;
+pub(crate) mod chain_wca_tpty;
 pub(crate) mod hard_sphere_bh;
 pub(crate) mod hard_sphere_wca;
 pub(crate) mod polar;
@@ -26,6 +27,7 @@ use attractive_perturbation_uvb3::AttractivePerturbationUVB3;
 use attractive_perturbation_wca::AttractivePerturbationWCA;
 use chain_bh_tptv::ChainBhTptv;
 use chain_bh_tpty::ChainBH;
+use chain_wca_tpty::ChainWCA;
 use hard_sphere_bh::HardSphereBH;
 use hard_sphere_wca::HardSphereWCA;
 //pub use polar::DQVariants;
@@ -78,7 +80,7 @@ impl Default for UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Second,
-            combination_rule: CombinationRule::ArithmeticPhi,
+            combination_rule: CombinationRule::OneFluidPsi, //ArithmeticPhi,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -522,7 +524,10 @@ mod test {
             .to_reduced(RGAS * t_x * state_wca.total_moles)
             .unwrap();
 
-        assert_relative_eq!(a_wca, -0.597791038364405, max_relative = 1e-5);
+        // dbg!(state_wca.residual_helmholtz_energy_contributions());
+
+        assert_relative_eq!(a_wca, -0.59779083633485275, max_relative = 1e-8);
+        // assert_relative_eq!(a_wca, -0.597791038364405, max_relative = 1e-5);
         Ok(())
     }
 
@@ -552,7 +557,17 @@ mod test {
             .residual_helmholtz_energy()
             .to_reduced(RGAS * t_x * state_wca.total_moles)
             .unwrap();
+        
+        let contributions = state_wca.residual_helmholtz_energy_contributions();
+
+        for (name, value) in contributions.iter() {
+            let a_red = value.to_reduced(RGAS * state_wca.temperature * state_wca.total_moles)?;
+            println!("{:<30}: A / NkT = {:>.10}", &name, a_red);
+        }
+        
+        // NB this is for OneFluidPsi combination rule for u-fraction
         assert_relative_eq!(a_wca, -0.034206207363139396, max_relative = 1e-5);
+        
         Ok(())
     }
 }
