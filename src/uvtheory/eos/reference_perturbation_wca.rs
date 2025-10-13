@@ -25,38 +25,38 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationWCA
         let p = &self.parameters;
         let n = p.sigma.len();
         let x = &state.molefracs;
-        let d = diameter_wca(p, state.temperature);
-        //let q = diameter_q_wca(&p, state.temperature);
+        let d = diameter_wca(p, state.temperature);        
         let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let eta_a = packing_fraction_a(p, eta, state.temperature);
         let eta_b = packing_fraction_b(p, eta, state.temperature);
+        
         let mut a = D::zero();
 
         for i in 0..n {
             for j in 0..n {
-                let rs_ij = ((p.rep[i] / p.att[i]).powf(1.0 / (p.rep[i] - p.att[i]))
-                    + (p.rep[j] / p.att[j]).powf(1.0 / (p.rep[j] - p.att[j])))
-                    * 0.5; // MIXING RULE not clear!!!
-                let d_ij = (d[i] + d[j]) * 0.5; // (d[i] * p.sigma[i] + d[j] * p.sigma[j]) * 0.5;
 
-                let t_ij = state.temperature / p.eps_k_ij[[i, j]];
                 let rep_ij = p.rep_ij[[i, j]];
                 let att_ij = p.att_ij[[i, j]];
-                let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij))
-                    * p.sigma_ij[[i, j]];
+                let rs_ij_3 = ( (rep_ij/att_ij).powf(1.0/(rep_ij - att_ij)) * p.sigma_ij[[i,j]] ).powi(3);
 
-                a += x[i]
-                    * x[j]
-                    * p.m[i]
-                    * p.m[j]
-                    * ((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3)
-                        * (-q_ij.powi(3) + (rs_ij * p.sigma_ij[[i, j]]).powi(3))
-                        - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3))
-                            * (-d_ij.powi(3) + (rs_ij * p.sigma_ij[[i, j]]).powi(3)))
+                // Additive hard-sphere fluid mixture as reference fluid for Mayer-f expansion
+                let d_ij_3 = ((d[i] + d[j]) * 0.5).powi(3);
+                
+                // Exact low-density limit of correlation integral
+                let t_ij = state.temperature / p.eps_k_ij[[i, j]];
+                let q_ij_3 = ( dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij)) * p.sigma_ij[[i, j]] ).powi(3);
+                let i0_ldl = d_ij_3 - q_ij_3;
+
+                // MDA for correlation integral without low-density limit                
+                let i0_noldl = ((-eta_a[[i, j]]*0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3) - 1.0) * (-q_ij_3 + rs_ij_3)
+                                - ((-eta_b[[i, j]]*0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3) - 1.0) * (-d_ij_3 + rs_ij_3) ;
+                                
+                // Helmholtz energy / (2/3 PI rho)
+                a -= x[i] * x[j] * p.m[i] * p.m[j] * ( i0_noldl + i0_ldl );
+                    
             }
-        }
-
-        -a * state.moles.sum().powi(2) * 2.0 / 3.0 / state.volume * PI
+        }        
+        ( a * 2.0/3.0 * PI * state.partial_density.sum() ) * state.moles.sum() 
     }
 }
 

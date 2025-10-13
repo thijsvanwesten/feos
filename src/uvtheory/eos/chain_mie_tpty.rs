@@ -45,7 +45,6 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
 
             // CCF Mie fluid (uf-theory)
             let rho_st = state.partial_density.sum() * (x *&p.m * &p.sigma.mapv(|s| s.powi(3))).sum();
-            // let rho_st = (state.partial_density * &p.sigma.mapv(|s| s.powi(3))).sum();
             let t_st = state.temperature/p.epsilon_k[i];
             let nu_inv = (p.rep[i]).recip();            
                         
@@ -121,7 +120,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
     }
 }
 
-// CCF of two WCA monomers of index l and m in a WCA fluid mixture at reduced distance r/sigma.
+// CCF of two WCA monomers of index i and j in a WCA fluid mixture at reduced distance r/sigma.
 // NB temperature is dimensional.
 fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     r_st: D,
@@ -144,14 +143,18 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     let yhs_r = y_hf(&partial_density, &mseg, &dhs, i, j, r_st*sigma/d_hs);
     let yhs_d = y_hf(&partial_density, &mseg, &dhs, i, j, D::one());    
 
-    // Effective packing fractions of first-order Mayer-f perturbation term of da01    
+    // Effective packing fractions (+derivatives) for first-order Mayer-f perturbation term in Helmholz energy da01    
     let (eta_a, eta_a_eta) = packing_fraction_a_ij(p, eta, temperature, i,j);
     let (eta_b,eta_b_eta) = packing_fraction_b_ij(p, eta, temperature, i, j);       
 
-    let yhs_a = (D::one()-eta_a/2.0) / (D::one()-eta_a).powi(3); 
-    let yhs_b = (D::one()-eta_b/2.0) / (D::one()-eta_b).powi(3); 
-    let yhs_a_eta = (-eta_a_eta/2.0) / (D::one()-eta_a).powi(3) + D::one()*3.0*(D::one()-eta_a/2.0)*eta_a_eta / (D::one()-eta_a).powi(4);
-    let yhs_b_eta = (-eta_b_eta/2.0) / (D::one()-eta_b).powi(3) + D::one()*3.0*(D::one()-eta_b/2.0)*eta_b_eta / (D::one()-eta_b).powi(4);      
+    let zms_a = D::one() / (D::one()-eta_a);
+    let zms_b = D::one() / (D::one()-eta_b);
+    let zms_a3 = zms_a*zms_a*zms_a;
+    let zms_b3 = zms_b*zms_b*zms_b;
+    let yhs_a = (D::one()-eta_a/2.0) * zms_a3; 
+    let yhs_b = (D::one()-eta_b/2.0) * zms_b3; 
+    let yhs_a_eta = (-eta_a_eta/2.0) * zms_a3 + (D::from(3.0)-eta_a*1.5)*eta_a_eta *zms_a3*zms_a;
+    let yhs_b_eta = (-eta_b_eta/2.0) * zms_b3 + (D::from(3.0)-eta_b*1.5)*eta_b_eta *zms_b3*zms_b;
 
     // Effective packing fraction specific to this routine
     let eta_c = packing_fraction_c_ij(p, eta, temperature, i, j);
@@ -164,15 +167,11 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
 
     // y01
     let integral1 = -yhs_c*q3/d3;
-    //       Iy01_2 = (1.0-etaC/2.0)/(1.0-etaC)**3 * q3/dhs_st**3
     let fac1 = (rm3-q3)/d3;
     let fac2 = (rm3-d3)/d3;
     let integral2 = -eta *( yhs_a_eta*fac1 - yhs_b_eta*fac2 ) - ( yhs_a*fac1 - yhs_b*fac2 );
-    //       derivative_term = -eta * ( yhsA_eta*(rm_st**3 - q3) - yhsB_eta*(rm_st**3 - dhs_st**3) ) /dhs_st**3 &
-    //       - ( yhsA*(rm_st**3 - q3) - yhsB*(rm_st**3 - dhs_st**3) ) /dhs_st**3 
-    let yhs_cs = (D::one()-eta/2.0) / (D::one()-eta).powi(3);     
+    let yhs_cs = (D::one()-eta*0.5) / (D::one()-eta).powi(3);     
     let y01 = integral1 + integral2 + yhs_cs;
-    //       y01 = ( derivative_term - Iy01_2 + (1.0-eta/2.0)/(1.0-eta)**3 )
     
     // First-order Mayer-f perturbation expansion ln(y0(r)) about ln(y^HS_d(r))
     yhs_r * (y01 / yhs_d).exp()
@@ -188,10 +187,14 @@ fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(
     j: usize
 ) -> D {
 
-    let dhs_ij = diameter_wca_i(parameters, temperature, i) + diameter_wca_i(parameters, temperature, j);
-    let rsij = (parameters.rep_ij[[i, j]] / parameters.att_ij[[i, j]])
-        .powf(1.0 / (parameters.rep_ij[[i, j]] - parameters.att_ij[[i, j]]));
-    let tau = -dhs_ij / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+    let rep = parameters.rep_ij[[i,j]];
+    let att = parameters.att_ij[[i,j]];
+    let rep_inv = 1.0/rep;
+    let rep_inv2 = rep_inv*rep_inv;
+
+    let dhs = diameter_wca_i(parameters, temperature, i) + diameter_wca_i(parameters, temperature, j);
+    let rmin = (rep / att).powf(1.0 / (rep - att));
+    let tau = -dhs / (parameters.sigma[i] + parameters.sigma[j]) + rmin; //dimensionless
 
     let para_ic = [ -2.43121181e-01, -4.42246830e+00,  1.27240515e+00, -1.76709844e+01,
     -2.59293256e-01,  1.91474433e+01,  8.67908337e-01, -2.13124347e+01,
@@ -199,16 +202,15 @@ fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(
     -1.43679473e-01,  9.74930050e+01,  1.68719700e+00,  3.80164876e+01,
     3.04912631e+01, -6.94411993e+01,  3.02445041e+02, -3.42554082e+02, 
     2.21010882e+01,  8.59563268e+01, -6.35352038e+01, -5.05404224e+01 ];
-
-    let m_mie = parameters.rep_ij[[i,j]];
-    let c1 = tau*(para_ic[0] + para_ic[1]/m_mie + para_ic[16]/m_mie.powi(2)) + 
-    tau.powi(2)*(para_ic[2] + para_ic[3]/m_mie + para_ic[20]/m_mie.powi(2));
-    let c2 = tau*(para_ic[4] + para_ic[5]/m_mie + para_ic[17]/m_mie.powi(2)) + 
-    tau.powi(2)*(para_ic[6] + para_ic[7]/m_mie + para_ic[21]/m_mie.powi(2));
-    let c3 = tau*(para_ic[8] + para_ic[9]/m_mie + para_ic[18]/m_mie.powi(2)) + 
-    tau.powi(2)*(para_ic[10] + para_ic[11]/m_mie + para_ic[22]/m_mie.powi(2));
-    let c4 = tau*(para_ic[12] + para_ic[13]/m_mie + para_ic[19]/m_mie.powi(2)) + 
-    tau.powi(2)*(para_ic[14] + para_ic[15]/m_mie + para_ic[23]/m_mie.powi(2));
+    
+    let c1 = tau*(para_ic[0] + para_ic[1]*rep_inv + para_ic[16]*rep_inv2) + 
+    tau.powi(2)*(para_ic[2] + para_ic[3]*rep_inv + para_ic[20]*rep_inv2);
+    let c2 = tau*(para_ic[4] + para_ic[5]*rep_inv + para_ic[17]*rep_inv2) + 
+    tau.powi(2)*(para_ic[6] + para_ic[7]*rep_inv + para_ic[21]*rep_inv2);
+    let c3 = tau*(para_ic[8] + para_ic[9]*rep_inv + para_ic[18]*rep_inv2) + 
+    tau.powi(2)*(para_ic[10] + para_ic[11]*rep_inv + para_ic[22]*rep_inv2);
+    let c4 = tau*(para_ic[12] + para_ic[13]*rep_inv + para_ic[19]*rep_inv2) + 
+    tau.powi(2)*(para_ic[14] + para_ic[15]*rep_inv + para_ic[23]*rep_inv2);
     
     eta + eta*c1 + eta.powi(2)*c2 + eta.powi(3)*c3 + eta.powi(4)*c4
 }
@@ -231,7 +233,9 @@ fn y_hf<D: DualNum<f64> + Copy>(
         let z2 = zeta[2];
         let z3 = zeta[3];
         let zms = -z3 + 1.0;
-        let zms_recip = zms.recip();        
+        let zms = zms.recip();
+        let zms2 = zms*zms;
+        let zms3 = zms2*zms;       
         
         //-------------------
         // CCF at HS contact 
@@ -240,7 +244,7 @@ fn y_hf<D: DualNum<f64> + Copy>(
         for i in 0..n {
             for j in 0..n {
                 let dij = d[i]*d[j]*(d[i]+d[j]).recip();
-                y1[[i,j]] = zms_recip + zms_recip.powi(2) * 3.0*z2*dij + zms_recip.powi(3)*2.0*(z2*dij).powi(2);
+                y1[[i,j]] = zms + zms2*3.0*z2*dij + zms3*2.0*(z2*dij).powi(2);
             }
         }
             
@@ -275,10 +279,10 @@ fn y_hf<D: DualNum<f64> + Copy>(
         let c4 = D::one()*(-1.0) + D::one()*3.0*(z2*dk).powi(2) - D::one()*2.0*(z2*dk).powi(3);
 
         // density-dependent parameters
-        let i1 = (zms_recip.powi(3) - 1.0)* (1.0/3.0); 
-        let i2 = z3.powi(2) * (D::one()*3.0-z3) *zms_recip.powi(3) / 6.0;
-        let i3 = (z3 * zms_recip).powi(3) / 3.0;
-        let i4 = ( z3*(D::one()*6.0 - z3*15.0 + z3*z3*11.0) *zms_recip.powi(3) / 6.0) + zms.ln();
+        let i1 = (zms3 - 1.0)* (1.0/3.0); 
+        let i2 = z3.powi(2) * (D::one()*3.0-z3) *zms3 / 6.0;
+        let i3 = (z3*z3*z3 * zms3) / 3.0;
+        let i4 = ( z3*(D::one()*6.0 - z3*15.0 + z3*z3*11.0) *zms3 / 6.0) + (-z3+1.0).ln();
 
         let log_y0 = c1*i1 + c2*i2 + c3*i3 + c4*i4;
 
@@ -288,7 +292,8 @@ fn y_hf<D: DualNum<f64> + Copy>(
         let dhs = (d[l]+d[m])*0.5;
         let lny1 = y1[[l,m]].ln();
         let blm = (dlog_y0[l] + dlog_y0[m])*0.5;
-        let clm = ( lny1 - log_y0 - blm*(dhs-a_lm*2.0+a_lm*a_lm/dhs) ) / (dhs.powi(3) - a_lm.powi(3)*4.0 + a_lm.powi(4)*3.0/dhs );
+        let clm = ( lny1 - log_y0 - blm*(dhs-a_lm*2.0+a_lm*a_lm/dhs) ) 
+        / (dhs.powi(3) - a_lm.powi(3)*4.0 + a_lm.powi(4)*3.0/dhs );
         let dlm = a_lm*a_lm*(blm + clm*3.0*a_lm*a_lm);
         let alm = lny1 - blm*dhs - clm*dhs.powi(3) - dlm/dhs;        
 

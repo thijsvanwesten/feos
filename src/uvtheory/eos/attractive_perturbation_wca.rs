@@ -83,88 +83,73 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationWC
     /// Helmholtz energy for attractive perturbation, eq. 52
     fn helmholtz_energy(&self, state: &StateHD<D>) -> D {
         
+        let exact_b21u = false;
+
         // parameters and state
         let p = &self.parameters;
         let x = &state.molefracs;
         let t = state.temperature;
         let density = state.partial_density.sum();
 
-        // one-fluid description of first-order perturbation term        
-        let (rep_x, att_x, sigma_x, sigma_vdw1f_3, epsilon_vdw1f, d_x, m_mix) =
-            one_fluid_properties(p, x, t);
-
+        // One-fluid approximation
+        let (rep_x, att_x, sigma_x, sigma_vdw1f_3, epsilon_vdw1f, d_x, m_mix) = one_fluid_properties(p, x, t);
         let t_x = state.temperature / epsilon_vdw1f;    // VdW-1f temperature
-        let rho_st = density * m_mix * sigma_x.powi(3); // dimensionless mixture density        
-        
-        let rm_x = (rep_x / att_x).powd((rep_x - att_x).recip());
-        let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
-        let q_x = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
+        let rho_st = density * m_mix * sigma_x.powi(3); // dimensionless mixture density
+        let vdw1f_prefactor = D::one() * 2.0*PI *m_mix.powi(2)*sigma_vdw1f_3/t_x;       
 
-        let i_wca = correlation_integral_wca(rho_st, mean_field_constant_x, rep_x, att_x, d_x, q_x, rm_x);
-        let i_wca_ldl = -mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0; // consider 1. putting this in correlation_integral_wca; 2. calculating exactly
-        
-        let vdw1f_prefactor = m_mix.powi(2)*sigma_vdw1f_3/t_x;
-
-        let delta_a1u  = D::one()* 2.0*PI *vdw1f_prefactor *i_wca    *state.partial_density.sum();
-        let delta_b21u = D::one()* 2.0*PI *vdw1f_prefactor *i_wca_ldl;
-        
-        // u-fraction
+        let mut b21u = D::zero();
+        if !exact_b21u {
+            let q_x = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
+            b21u =  vdw1f_prefactor * correlation_integral_wca_ldl(rep_x, att_x, q_x);
+        }        
+        let a1u_noldl = vdw1f_prefactor * correlation_integral_wca_noldl(rho_st, rep_x, att_x, d_x) * density ;
         let psi = D::one() - u_fraction_wca(rep_x, rho_st);
-        
-        // attractive contribution to second virial coefficient
-        let mut b2_pert = D::zero();
+
+        // Exact second-virial part
+        let mut b2pert = D::zero();
         for i in 0..p.ncomponents {
             for j in 0..p.ncomponents {
                 let t_ij = t / p.eps_k_ij[[i, j]];
-                let rep_ij = p.rep_ij[[i, j]];
-                let att_ij = p.att_ij[[i, j]];
-                let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));                
+                let rep_ij = p.rep_ij[[i,j]];
+                let att_ij = p.att_ij[[i,j]];
+                let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
                 
-                b2_pert += x[i]*x[j]*p.m[i]*p.m[j]*p.sigma_ij[[i, j]].powi(3) *delta_b2(t_ij, rep_ij, att_ij, q_ij);
+                let prefactor = x[i]*x[j]*p.m[i]*p.m[j]*p.sigma_ij[[i, j]].powi(3);
+                b2pert += prefactor *delta_b2(t_ij, rep_ij, att_ij, q_ij);
+
+                if exact_b21u {b21u += prefactor * correlation_integral_wca_ldl(D::from(rep_ij), D::from(att_ij), q_ij)};
             }
-        }       
-
-        // attractive part of Helmholtz energy divided by kT
-        state.moles.sum() * (delta_a1u + psi * (b2_pert - delta_b21u) * density)
-    }
-}
-
-fn residual_virial_coefficient<D: DualNum<f64> + Copy>(p: &UVParameters, x: &Array1<D>, t: D) -> D {
-    let mut delta_b2bar = D::zero();
-
-    for i in 0..p.ncomponents {
-        let xi = x[i];
-
-        for j in 0..p.ncomponents {
-            //let q_ij = (q[i] / p.sigma[i] + q[j] / p.sigma[j]) * 0.5;
-            let t_ij = t / p.eps_k_ij[[i, j]];
-            let rep_ij = p.rep_ij[[i, j]];
-            let att_ij = p.att_ij[[i, j]];
-
-            let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
-
-            // Recheck mixing rule!
-            delta_b2bar +=
-                xi * x[j] * p.sigma_ij[[i, j]].powi(3) * delta_b2(t_ij, rep_ij, att_ij, q_ij);
         }
+
+        // Perturbation term                
+        let a1u  = a1u_noldl + b21u * density;
+
+        // Helmholtz energy contribution divided by kT
+        state.moles.sum() * (a1u + psi * (b2pert - b21u) * density)
     }
-    delta_b2bar
 }
 
-fn correlation_integral_wca<D: DualNum<f64> + Copy>(
-    rho_x: D,
-    mean_field_constant_x: D,
-    rep_x: D,
-    att_x: D,
-    d_x: D,
-    q_x: D,
-    rm_x: D,
-) -> D {
-    let c = coefficients_wca(rep_x, att_x, d_x);
+/// Correlation integral for first-order WCA perturbation term Mie fluids
+fn correlation_integral_wca_noldl<D: DualNum<f64> + Copy>(
+    rho: D,    
+    rep: D,
+    att: D,
+    d: D,
+) -> D {    
+    let c = coefficients_wca(rep, att, d);    
+    mie_prefactor(rep, att) * (c[0] * rho + c[1] * rho.powi(2) + c[2] * rho.powi(3))
+        / (c[3] * rho + c[4] * rho.powi(2) + c[5] * rho.powi(3) + 1.0)
+}
 
-    (q_x.powi(3) - rm_x.powi(3)) * 1.0 / 3.0 - mean_field_constant_x
-        + mie_prefactor(rep_x, att_x) * (c[0] * rho_x + c[1] * rho_x.powi(2) + c[2] * rho_x.powi(3))
-            / (c[3] * rho_x + c[4] * rho_x.powi(2) + c[5] * rho_x.powi(3) + 1.0)
+/// Low-density limit of correlation integral for first-order WCA perturbation term Mie fluids
+fn correlation_integral_wca_ldl<D: DualNum<f64> + Copy>(    
+    rep: D,
+    att: D,
+    q: D,
+) -> D {
+    let rm = (rep / att).powd((rep - att).recip());
+    let mean_field_constant = mean_field_constant(rep, att, rm);
+    (q.powi(3) - rm.powi(3)) / 3.0 - mean_field_constant
 }
 
 /// U-fraction for WCA division
@@ -301,6 +286,29 @@ fn y_eff<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64) -> 
     beta_eff.exp() - 1.0
 }
 
+
+fn residual_virial_coefficient<D: DualNum<f64> + Copy>(p: &UVParameters, x: &Array1<D>, t: D) -> D {
+    let mut delta_b2bar = D::zero();
+
+    for i in 0..p.ncomponents {
+        let xi = x[i];
+
+        for j in 0..p.ncomponents {
+            //let q_ij = (q[i] / p.sigma[i] + q[j] / p.sigma[j]) * 0.5;
+            let t_ij = t / p.eps_k_ij[[i, j]];
+            let rep_ij = p.rep_ij[[i, j]];
+            let att_ij = p.att_ij[[i, j]];
+
+            let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
+
+            // Recheck mixing rule!
+            delta_b2bar +=
+                xi * x[j] * p.sigma_ij[[i, j]].powi(3) * delta_b2(t_ij, rep_ij, att_ij, q_ij);
+        }
+    }
+    delta_b2bar
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -334,16 +342,16 @@ mod test {
         dbg!(epsilon_k_x);
         let t_x = state.temperature / epsilon_k_x;
         let rho_x = state.partial_density.sum() * sigma_x.powi(3);
-        let rm_x = (rep_x / att_x).powd((rep_x - att_x).recip());
-        let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
+        
         dbg!(t_x);
         let q_vdw = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
         // let b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x)
         //     / p.sigma[0].powi(3);
         // assert_relative_eq!(b21u.re(), -1.02233215790525, epsilon = 1e-12);
 
-        let i_wca =
-            correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_vdw, rm_x);
+        let i_wca_noldl = correlation_integral_wca_noldl(rho_x, rep_x, att_x, d_x);
+        let i_wca_ldl = correlation_integral_wca_ldl(rep_x, att_x, q_vdw);
+        let i_wca = i_wca_noldl + i_wca_ldl;
 
         let delta_a1u = state.partial_density.sum() / t_x * i_wca * 2.0 * PI * weighted_sigma3_ij;
 
@@ -397,8 +405,6 @@ mod test {
         assert_relative_eq!(phi_u, 0.99750066585468078, epsilon = 1e-6);
 
         // Delta B21u
-        let rm_x = (rep_x / att_x).powd((rep_x - att_x).recip());
-        let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
         let t_x = state.temperature / epsilon_k_x;
 
         dbg!(t_x.re());
@@ -412,8 +418,9 @@ mod test {
         // delta a1u
         let rho_x = state.partial_density.sum() * sigma_x.powi(3);
 
-        let i_wca =
-            correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_vdw, rm_x);
+        let i_wca_noldl = correlation_integral_wca_noldl(rho_x, rep_x, att_x, d_x);
+        let i_wca_ldl = correlation_integral_wca_ldl(rep_x, att_x, q_vdw);
+        let i_wca = i_wca_noldl + i_wca_ldl;            
 
         let delta_a1u = state.partial_density.sum() / state.temperature
             * i_wca
@@ -471,8 +478,6 @@ mod test {
         assert_relative_eq!(b2bar.re(), -12.106977583257606, epsilon = 1e-12);
 
         //delta b21u
-        let rm_x = (rep_x / att_x).powd((rep_x - att_x).recip());
-        let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
         let t_x = state.temperature / epsilon_k_x;
         let q_vdw = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
         // let delta_b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
@@ -487,8 +492,10 @@ mod test {
         let rho_x = state.partial_density.sum() * sigma_x.powi(3);
         assert_relative_eq!(d_x, 0.95196953178057431, epsilon = 1e-6);
 
-        let i_wca =
-            correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_vdw, rm_x);
+        let i_wca_noldl = correlation_integral_wca_noldl(rho_x, rep_x, att_x, d_x);
+        let i_wca_ldl = correlation_integral_wca_ldl(rep_x, att_x, q_vdw);
+        let i_wca = i_wca_noldl + i_wca_ldl;
+
         dbg!(weighted_sigma3_ij.re());
         dbg!(epsilon_k_x);
         let delta_a1u = state.partial_density.sum() / state.temperature
