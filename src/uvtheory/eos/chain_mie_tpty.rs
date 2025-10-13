@@ -9,17 +9,17 @@ use std::fmt;
 use std::{f64::consts::FRAC_PI_6, f64::consts::PI, sync::Arc};
 
 #[derive(Clone)]
-pub struct ChainWCA {
+pub struct ChainMie {
     pub parameters: Arc<UVParameters>,
 }
 
-impl fmt::Display for ChainWCA {
+impl fmt::Display for ChainMie {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Reference Chain")
+        write!(f, "TPT1y Mie Chain Contribution")
     }
 }
 
-impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainWCA {
+impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
     /// Helmholtz energy for perturbation reference (Mayer-f), eq. 29
     fn helmholtz_energy(&self, state: &StateHD<D>) -> D {
         let p = &self.parameters;       
@@ -362,6 +362,7 @@ mod test {
     use crate::uvtheory::{parameters::utils::test_parameters};
     use feos_core::parameter::{Identifier, Parameter, PureRecord};
     use ndarray::arr1;
+    use num_dual::{Dual2_64, Dual3_64, Dual64, HyperDual64};
   
     /*
     #[test]
@@ -504,23 +505,54 @@ mod test {
     /*
     #[test]
     fn test_y_hf() {
-        let moles = arr1(&[2.0]);
 
+        let moles = arr1(&[2.0]);
         let reduced_temperature = 2.0;
         let reduced_density = 0.6;
         let reduced_volume = moles[0] / reduced_density;
+
+        // playing around with dual number to get derivatives:
+
+        // // First derivative to temperature
+        // let moles = arr1(&[Dual64::from_re(2.0)]);
+        // let reduced_temperature = Dual64::new(2.0,1.0);
+        // let reduced_density = Dual64::from_re(0.6);
+        // let reduced_volume = moles[0] / reduced_density;
+
+        // // second derivative to temperature
+        // // let moles = arr1(&[Dual2_64::from_re(2.0)]);
+        // let reduced_temperature = Dual2_64::from_re(2.0).derivative();
+        // // let reduced_density = Dual2_64::from_re(0.6);
+        // // let reduced_volume = moles[0] / reduced_density;
+
+        // // mixed double derivative
+        // // let moles = arr1(&[HyperDual64::from_re(2.0)]);
+        // let reduced_temperature = HyperDual64::from_re(2.0).derivative1();
+        // // let reduced_density = HyperDual64::from_re(0.6).derivative2();
+        // // let reduced_volume = moles[0] / reduced_density;
+
+        // // third derivative
+        // // let moles = arr1(&[Dual3_64::from_re(2.0)]);
+        // let reduced_temperature = Dual3_64::from_re(2.0).derivative();
+        // // let reduced_density = Dual3_64::from_re(0.6);
+        // // let reduced_volume = moles[0] / reduced_density;
+
 
         let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0);
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
 
         let d = diameter_wca(&p, state.temperature);
+        
+        dbg!(&d);
+        assert!(1.0==2.0);
+
         let y_hf = y_hf(
             &state.partial_density,
             &p.m,
             &d,
             0,
             0,
-            p.sigma[0] / d[0],
+            d[0].recip() * p.sigma[0],
         );
         assert_eq!((y_hf.re()*1e10).round()/1e10, 2.1615376807);
     }
@@ -688,7 +720,7 @@ mod test {
     }
      */
 
-    /*
+    // /*
     #[test]
     fn test_a_ljchain() {
         let moles = arr1(&[2.0]);
@@ -698,7 +730,7 @@ mod test {
         let reduced_volume = moles[0] / reduced_density;
 
         let p = test_parameters(2.0, 12.0, 6.0, 1.0, 1.0);
-        let chain = ChainWCA {
+        let chain = ChainMie {
             parameters: Arc::new(p.clone()),
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
@@ -717,7 +749,7 @@ mod test {
         let reduced_volume = moles[0] / reduced_density;
 
         let p = test_parameters(5.0, 18.0, 6.0, 1.0, 1.0);
-        let chain = ChainWCA {
+        let chain = ChainMie {
             parameters: Arc::new(p.clone()),
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
@@ -755,7 +787,7 @@ mod test {
             None,
         )
         .unwrap();
-        let chain = ChainWCA {
+        let chain = ChainMie {
             parameters: Arc::new(p.clone()),
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
@@ -764,6 +796,6 @@ mod test {
         dbg!(&a);
         assert_eq!(a,  -0.22988783790867773);
     }        
-     */
+    //  */
 
 }

@@ -59,7 +59,7 @@ pub mod pcsaft;
 pub mod pets;
 #[cfg(feature = "saftvrqmie")]
 pub mod saftvrqmie;
-// #[cfg(feature = "uvtheory")]
+//#[cfg(feature = "uvtheory")]
 pub mod uvtheory;
 
 #[cfg(feature = "python")]

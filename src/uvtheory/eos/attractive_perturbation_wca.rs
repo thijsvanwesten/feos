@@ -82,85 +82,52 @@ impl fmt::Display for AttractivePerturbationWCA {
 impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationWCA {
     /// Helmholtz energy for attractive perturbation, eq. 52
     fn helmholtz_energy(&self, state: &StateHD<D>) -> D {
+        
+        // parameters and state
         let p = &self.parameters;
         let x = &state.molefracs;
         let t = state.temperature;
         let density = state.partial_density.sum();
 
-        // vdw effective one fluid properties
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
+        // one-fluid description of first-order perturbation term        
+        let (rep_x, att_x, sigma_x, sigma_vdw1f_3, epsilon_vdw1f, d_x, m_mix) =
             one_fluid_properties(p, x, t);
-        let t_x = state.temperature / epsilon_k_x;
-        let rho_x = density * sigma_x.powi(3);
+
+        let t_x = state.temperature / epsilon_vdw1f;    // VdW-1f temperature
+        let rho_st = density * m_mix * sigma_x.powi(3); // dimensionless mixture density        
+        
         let rm_x = (rep_x / att_x).powd((rep_x - att_x).recip());
         let mean_field_constant_x = mean_field_constant(rep_x, att_x, rm_x);
         let q_x = dimensionless_diameter_q_wca(t_x, rep_x, att_x);
-        let i_wca =
-            correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_x, rm_x);
 
-        let delta_a1u = state.partial_density.sum() / t_x * i_wca * 2.0 * PI * weighted_sigma3_ij;
-        let mut low_dens_corr = D::zero();
+        let i_wca = correlation_integral_wca(rho_st, mean_field_constant_x, rep_x, att_x, d_x, q_x, rm_x);
+        let i_wca_ldl = -mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0; // consider 1. putting this in correlation_integral_wca; 2. calculating exactly
+        
+        let vdw1f_prefactor = m_mix.powi(2)*sigma_vdw1f_3/t_x;
 
-        let delta_b21u_x =
-            (-mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0) / t_x * 2.0 * PI;
-
-        dbg!(t_x,rho_x,delta_a1u);
-
+        let delta_a1u  = D::one()* 2.0*PI *vdw1f_prefactor *i_wca    *state.partial_density.sum();
+        let delta_b21u = D::one()* 2.0*PI *vdw1f_prefactor *i_wca_ldl;
+        
+        // u-fraction
+        let psi = D::one() - u_fraction_wca(rep_x, rho_st);
+        
+        // attractive contribution to second virial coefficient
+        let mut b2_pert = D::zero();
         for i in 0..p.ncomponents {
-            let xi = x[i];
-            let ufraction_i = u_fraction_wca(D::one() * p.rep[i], density * p.sigma[i].powi(3));
             for j in 0..p.ncomponents {
                 let t_ij = t / p.eps_k_ij[[i, j]];
                 let rep_ij = p.rep_ij[[i, j]];
                 let att_ij = p.att_ij[[i, j]];
-                let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
-                let db2_ij = delta_b2(t_ij, rep_ij, att_ij, q_ij);
-                let ufraction_j = u_fraction_wca(D::one() * p.rep[j], density * p.sigma[j].powi(3));
-                let psi_ij = match self.combination_rule {
-                    CombinationRule::ArithmeticPhi => {
-                        let ufraction_ij = (ufraction_i + ufraction_j) * 0.5;
-                        -ufraction_ij + 1.0
-                    }
-                    CombinationRule::GeometricPhi => {
-                        let ufraction_ij = (ufraction_i * ufraction_j).sqrt();
-                        -ufraction_ij + 1.0
-                    }
-                    CombinationRule::GeometricPsi => {
-                        ((-ufraction_i + 1.0) * (-ufraction_j + 1.0)).sqrt()
-                    }
-                    CombinationRule::OneFluidPsi => {
-                        let ufraction_x = u_fraction_wca(
-                            rep_x,
-                            density * (x * &p.sigma.mapv(|s| s.powi(3))).sum(),
-                        );
-                        -ufraction_x + 1.0
-                    }
-                };
-                // Recheck mixing rule!
-                low_dens_corr +=
-                    xi * x[j] * (db2_ij - delta_b21u_x) * p.sigma_ij[[i, j]].powi(3) * psi_ij;
-
-                dbg!(i,j,-psi_ij+1.0,db2_ij*p.sigma_ij[[i,j]].powi(3),delta_b21u_x*p.sigma_ij[[i,j]].powi(3));
+                let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));                
+                
+                b2_pert += x[i]*x[j]*p.m[i]*p.m[j]*p.sigma_ij[[i, j]].powi(3) *delta_b2(t_ij, rep_ij, att_ij, q_ij);
             }
-        }
+        }       
 
-        state.moles.sum() * (delta_a1u + low_dens_corr * density)
+        // attractive part of Helmholtz energy divided by kT
+        state.moles.sum() * (delta_a1u + psi * (b2_pert - delta_b21u) * density)
     }
 }
-
-// (S43) & (S53)
-// fn delta_b12u<D: DualNum<f64> + Copy>(
-//     t_x: D,
-//     mean_field_constant_x: D,
-//     weighted_sigma3_ij: D,
-//     q_x: D,
-//     rm_x: D,
-// ) -> D {
-//     (-mean_field_constant_x - (rm_x.powi(3) - q_x.powi(3)) * 1.0 / 3.0) / t_x
-//         * 2.0
-//         * PI
-//         * weighted_sigma3_ij
-// }
 
 fn residual_virial_coefficient<D: DualNum<f64> + Copy>(p: &UVParameters, x: &Array1<D>, t: D) -> D {
     let mut delta_b2bar = D::zero();
@@ -200,8 +167,7 @@ fn correlation_integral_wca<D: DualNum<f64> + Copy>(
             / (c[3] * rho_x + c[4] * rho_x.powi(2) + c[5] * rho_x.powi(3) + 1.0)
 }
 
-/// U-fraction according to Barker-Henderson division.
-/// Eq. 15
+/// U-fraction for WCA division
 fn u_fraction_wca<D: DualNum<f64> + Copy>(rep_x: D, reduced_density: D) -> D {
     (reduced_density * CU_WCA[0]
         + reduced_density.powi(2) * (rep_x.recip() * CU_WCA[2] + CU_WCA[1]))
@@ -212,42 +178,59 @@ pub fn one_fluid_properties<D: DualNum<f64> + Copy>(
     p: &UVParameters,
     x: &Array1<D>,
     t: D,
-) -> (D, D, D, D, D, D) {
+) -> (D, D, D, D, D, D, D) {
     let d = diameter_wca(p, t);
     // &p.sigma;
 
-    let mut epsilon_k = D::zero();
-    let mut weighted_sigma3_ij = D::zero();
-    let mut rep = D::zero();
-    let mut att = D::zero();
-    let mut d_x_3 = D::zero();
+    let mut epsilon_k_vdw1f = D::zero();
+    let mut sigma_vdw1f_3 = D::zero();
+    let mut rep_x = D::zero();
+    let mut att_x = D::zero();
+    let mut d_x_st = D::zero();
+    let mut m_mix_2 = D::zero();
+    let mut sigma_x = D::zero();
 
     for i in 0..p.ncomponents {
         let xi = x[i];
 
-        d_x_3 += x[i] * d[i].powi(3);
-        for j in 0..p.ncomponents {
-            let _y = xi * x[j] * p.sigma_ij[[i, j]].powi(3);
-            weighted_sigma3_ij += _y;
-            epsilon_k += _y * p.eps_k_ij[[i, j]];
+        // mixing rules preserving packing fracion and density of mixture
+        d_x_st += x[i] * p.m[i] * d[i].powi(3);
+        sigma_x += x[i] * p.m[i] * p.sigma[i].powi(3);
 
-            rep += xi * x[j] * p.rep_ij[[i, j]];
-            att += xi * x[j] * p.att_ij[[i, j]];
+        for j in 0..p.ncomponents {
+            
+            // Van-der-Waals-one-fluid mixing rules
+            let mij_2 = xi * x[j] * p.m[i] * p.m[j];            
+            let sigma3_ij = mij_2 * p.sigma_ij[[i, j]].powi(3);
+            m_mix_2 += mij_2;
+            sigma_vdw1f_3 += sigma3_ij;
+            epsilon_k_vdw1f += sigma3_ij * p.eps_k_ij[[i, j]];
+
+            // ... mixing rule for Mie exponents
+            rep_x += xi * x[j] * p.rep_ij[[i, j]];
+            att_x += xi * x[j] * p.att_ij[[i, j]];
         }
     }
 
-    //let dx = (x * &d.mapv(|v| v.powi(3))).sum().powf(1.0 / 3.0);
-    let sigma_x = (x * &p.sigma.mapv(|v| v.powi(3))).sum().powf(1.0 / 3.0);
-    let dx = d_x_3.powf(1.0 / 3.0) / sigma_x;
+    epsilon_k_vdw1f = epsilon_k_vdw1f / sigma_vdw1f_3;
+    sigma_vdw1f_3 = sigma_vdw1f_3 / m_mix_2;
+    let m_mix = m_mix_2.sqrt();   
+    sigma_x = (sigma_x/m_mix).powf(1.0/3.0);
+    d_x_st = (d_x_st/m_mix).powf(1.0/3.0)  / sigma_x; // dimensionless
+
+    // let sigma_x = (x * &p.sigma.mapv(|v| v.powi(3))).sum().powf(1.0 / 3.0);
+    // let dx = d_x_3.powf(1.0 / 3.0) / sigma_x;
 
     (
-        rep,
-        att,
+        rep_x,
+        att_x,
         sigma_x,
-        weighted_sigma3_ij,
-        epsilon_k / weighted_sigma3_ij,
-        dx,
+        sigma_vdw1f_3,
+        epsilon_k_vdw1f,
+        d_x_st,
+        m_mix
     )
+
 }
 
 // Coefficients for IWCA from eq. (S55)
@@ -284,6 +267,7 @@ fn coefficients_wca<D: DualNum<f64> + Copy>(rep: D, att: D, d: D) -> [D; 6] {
 }
 
 fn delta_b2<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64, q: D) -> D {
+    // calculates dB2 / m^2 / sigma^3 
     let rm = (rep / att).powf(1.0 / (rep - att)); // Check mixing rule!!
     let rc = 5.0;
     let alpha = mean_field_constant(rep, att, rc);
@@ -345,7 +329,7 @@ mod test {
         );
         let x = &state.molefracs;
 
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
+        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, _m_mix) =
             one_fluid_properties(&p, &state.molefracs, state.temperature);
         dbg!(epsilon_k_x);
         let t_x = state.temperature / epsilon_k_x;
@@ -405,7 +389,7 @@ mod test {
             arr1(&[1.0, 0.5]),
         );
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
+        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, _m_mix) =
             one_fluid_properties(&p, &state.molefracs, state.temperature);
 
         // u-fraction
@@ -474,7 +458,7 @@ mod test {
         );
 
         let state = StateHD::new(reduced_temperature, volume, moles.clone());
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
+        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, _m_mix) =
             one_fluid_properties(&p, &state.molefracs, state.temperature);
         // u-fraction
         let density = state.partial_density.sum();

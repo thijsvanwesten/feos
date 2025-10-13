@@ -14,7 +14,7 @@ pub(crate) mod attractive_perturbation_uvb3;
 pub(crate) mod attractive_perturbation_wca;
 pub(crate) mod chain_bh_tptv;
 pub(crate) mod chain_bh_tpty;
-pub(crate) mod chain_wca_tpty;
+pub(crate) mod chain_mie_tpty;
 pub(crate) mod hard_sphere_bh;
 pub(crate) mod hard_sphere_wca;
 pub(crate) mod polar;
@@ -27,7 +27,7 @@ use attractive_perturbation_uvb3::AttractivePerturbationUVB3;
 use attractive_perturbation_wca::AttractivePerturbationWCA;
 use chain_bh_tptv::ChainBhTptv;
 use chain_bh_tpty::ChainBH;
-use chain_wca_tpty::ChainWCA;
+use chain_mie_tpty::ChainMie;
 use hard_sphere_bh::HardSphereBH;
 use hard_sphere_wca::HardSphereWCA;
 //pub use polar::DQVariants;
@@ -35,6 +35,7 @@ use polar::{Dipole, DipoleQuadrupole, Quadrupole};
 use reference_perturbation_bh::ReferencePerturbationBH;
 use reference_perturbation_uvb3::ReferencePerturbationUVB3;
 use reference_perturbation_wca::ReferencePerturbationWCA;
+
 
 /// Type of Combination Rule.
 #[derive(Debug, Clone)]
@@ -52,6 +53,7 @@ pub enum CombinationRule {
 pub enum Perturbation {
     BarkerHenderson,
     WeeksChandlerAndersen,
+    WeeksChandlerAndersenTPT,
 }
 
 /// Order of the highest virial coefficient included in the model.
@@ -170,6 +172,45 @@ impl UVTheory {
                     }
                 }
             }
+            Perturbation::WeeksChandlerAndersenTPT => {
+                contributions.push(Box::new(HardSphereWCA {
+                    parameters: parameters.clone(),
+                }));
+                match options.virial_order {
+                    VirialOrder::Second => {
+                        contributions.push(Box::new(ReferencePerturbationWCA {
+                            parameters: parameters.clone(),
+                        }));
+                        contributions.push(Box::new(AttractivePerturbationWCA {
+                            parameters: parameters.clone(),
+                            combination_rule: options.combination_rule.clone(),
+                        }));
+                        contributions.push(Box::new(ChainMie {
+                            parameters: parameters.clone(), 
+                        }));
+                    }
+                    VirialOrder::Third => {
+                        if parameters.sigma.len() > 1 {
+                            return Err(EosError::Error(
+                                "Third virial coefficient is not implemented for mixtures!"
+                                    .to_string(),
+                            ));
+                        }
+                        if parameters.att[0] != 6.0 {
+                            return Err(EosError::Error(
+                                "Third virial coefficient is not implemented for attractive exponents other than 6!"
+                                    .to_string(),
+                            ));
+                        }
+                        contributions.push(Box::new(ReferencePerturbationUVB3 {
+                            parameters: parameters.clone(),
+                        }));
+                        contributions.push(Box::new(AttractivePerturbationUVB3 {
+                            parameters: parameters.clone(),
+                        }));
+                    }
+                }
+            }            
         }
         if !parameters.association.is_empty() {
             contributions.push(Box::new(Association::new(
@@ -570,4 +611,46 @@ mod test {
         
         Ok(())
     }
+
+    #[test]
+    fn helmholtz_energy_pure_miechain() -> EosResult<()> {
+        let sig = 1.0;
+        let eps_k = 1.0;
+        let parameters = UVParameters::new_simple(5.0, 24.0, 6.0, sig, eps_k);
+        
+        let options = UVTheoryOptions {
+            max_eta: 0.5,
+            perturbation: Perturbation::WeeksChandlerAndersenTPT,
+            virial_order: VirialOrder::Second,
+            combination_rule: CombinationRule::OneFluidPsi,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
+            //dq_variant: DQVariants::DQ35,
+        };
+        let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
+        // let eos = Arc::new(UVTheory::new(Arc::new(parameters))?);
+
+        let reduced_temperature = 2.0;
+        let reduced_density = 0.15;
+        let temperature = reduced_temperature * eps_k * KELVIN;
+        let moles = arr1(&[2.0]) * MOL;
+        let volume = (sig * ANGSTROM).powi(3) / reduced_density * NAV * 2.0 * MOL;
+        let s = State::new_nvt(&eos, temperature, volume, &moles).unwrap();
+        let a = (s.residual_helmholtz_energy() / s.total_moles)
+            .to_reduced(RGAS * temperature)
+            .unwrap();
+
+        let contributions = s.residual_helmholtz_energy_contributions();
+
+        for (name, value) in contributions.iter() {
+            let a_red = value.to_reduced(RGAS * s.temperature * s.total_moles)?;
+            println!("{:<30}: A / NkT = {:>.10}", &name, a_red);
+        }
+
+        assert_relative_eq!(a, 0.93410937628984314, max_relative = 1e-9); 
+        // assert_relative_eq!(a, 0.18900517901738298, max_relative = 1e-12); 
+        Ok(())
+    }
+
+
 }

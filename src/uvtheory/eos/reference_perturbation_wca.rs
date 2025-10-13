@@ -47,6 +47,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationWCA
 
                 a += x[i]
                     * x[j]
+                    * p.m[i]
+                    * p.m[j]
                     * ((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3)
                         * (-q_ij.powi(3) + (rs_ij * p.sigma_ij[[i, j]]).powi(3))
                         - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3))
