@@ -51,11 +51,12 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationWCA
                 let i0_noldl = ((-eta_a[[i, j]]*0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3) - 1.0) * (-q_ij_3 + rs_ij_3)
                                 - ((-eta_b[[i, j]]*0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3) - 1.0) * (-d_ij_3 + rs_ij_3) ;
                                 
-                // Helmholtz energy / (2/3 PI rho)
+                // Reduced Helmholtz energy per molecule / (2/3 PI rho)
                 a -= x[i] * x[j] * p.m[i] * p.m[j] * ( i0_noldl + i0_ldl );
                     
             }
-        }        
+        }
+        // Reduced Helmholtz energy
         ( a * 2.0/3.0 * PI * state.partial_density.sum() ) * state.moles.sum() 
     }
 }

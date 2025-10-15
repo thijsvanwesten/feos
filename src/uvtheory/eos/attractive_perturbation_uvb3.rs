@@ -99,7 +99,8 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for AttractivePerturbationUV
         let d = diameter_wca(p, t);
         let x = &state.molefracs;
         // vdw effective one fluid properties
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, _m_mix) =
+        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, 
+            _m_mix, _prefactor_f, _prefactor_u) =
             one_fluid_properties(p, x, t);
         let t_x = state.temperature / epsilon_k_x;
         let rho_x = density * sigma_x.powi(3);
@@ -398,7 +399,8 @@ mod test {
             moles.clone(),
         );
         let x = &state.molefracs;
-        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, _m_mix) =
+        let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x, 
+            _m_mix, _prefactor_f, _prefactor_u) =
             one_fluid_properties(&p, &state.molefracs, state.temperature);
 
         let t_x = state.temperature / epsilon_k_x;

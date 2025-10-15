@@ -51,6 +51,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
             let par = [0.225625, 4.796965, 32.221125, 0.125222, -5.610177, -27.318559, -0.047445,
             53.729552, -436.591809, 0.274554, -26.467849, 491.023027, 5.877262, -32.468883, 1.84479, 
             31.8795, 30.32762, -446.19542, 720.456266];
+
             let c1 = D::one()*(par[0] + par[1]*nu_inv + par[2]*nu_inv*nu_inv)
             + t_st.recip()*(par[3] + par[4]*nu_inv + par[5]*nu_inv*nu_inv);            
             let c2 = D::one()*(par[6] + par[7]*nu_inv + par[8]*nu_inv*nu_inv)
@@ -90,7 +91,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
                 let a3 = par2[0] + par2[1] * fac3 + par2[2] * fac3.powi(2);
                 let b3 = par2[3] + par2[4] * fac3 + par2[5] * fac3.powi(2);                
                 
-                let ynn_wca = D::one() + bfac_st.powi(2)*(zms-1.0) + bfac*z2 * a3 * zms2 + (bfac*z2).powi(2) * b3 * zms.sqrt();
+                let ynn_wca = D::one() + bfac_st.powi(2)*(zms-1.0) + bfac*z2*a3*zms2 + (bfac*z2).powi(2)*b3*zms.sqrt();
 
                 // next-nearest-neighbour contribution Mie segments
                 let par3 = [8.187740E-004, 
@@ -273,7 +274,7 @@ fn y_hf<D: DualNum<f64> + Copy>(
 
         // density-independent parameters
         let dk = d[k];
-        let c1 = D::one() + D::one()*3.0*z2*dk + D::one()*3.0*z1*dk.powi(2) + z0*dk.powi(3);
+        let c1 = D::one() + z2*dk*3.0 + D::one()*3.0*z1*dk.powi(2) + z0*dk.powi(3);
         let c2 = D::one()*(-3.0) - z2*dk*6.0 + (z2*z2*9.0-z1*6.0)*dk*dk + (z1*z2*6.0 - z0*2.0)*dk.powi(3);
         let c3 = D::one()*3.0 + z2*dk*3.0 + (z1*3.0-z2*z2*12.0)*dk*dk + (z0-z1*z2*6.0+z2.powi(3)*8.0)*dk.powi(3);
         let c4 = D::one()*(-1.0) + D::one()*3.0*(z2*dk).powi(2) - D::one()*2.0*(z2*dk).powi(3);
