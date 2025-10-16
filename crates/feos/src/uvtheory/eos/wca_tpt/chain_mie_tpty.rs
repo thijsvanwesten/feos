@@ -57,7 +57,7 @@ impl ChainMie {
         let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let zms = (-eta + 1.0).recip();
         let zms2 = zms * zms;
-
+        
         // let z2t = (x * m * d.mapv(|di| di.powi(2))).sum() * FRAC_PI_6;
         let z2t = (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * d[i].powi(2)) * FRAC_PI_6;
         let z2 = density * z2t;
@@ -110,11 +110,11 @@ impl ChainMie {
             // Helmholtz energy
             a -= x[i] * (m[i] - 1.0) * y_sigma.ln();
 
-            dbg!(rho_st);
-            dbg!(phiu);
-            dbg!(y_wca_sigma);
-            dbg!(y_sigma);
-            dbg!(a);
+            // dbg!(rho_st);
+            // dbg!(phiu);
+            // dbg!(y_wca_sigma);
+            // dbg!(y_sigma);
+            // dbg!(a);
 
             //-----------------
             // TPT1-y (homo-segmented)
@@ -811,10 +811,8 @@ mod test {
     // /*
     #[test]
     fn test_a_ljchain() {
-        let moles = dvector![2.0];
         let reduced_temperature = 2.0;
         let reduced_density = 0.6;
-        let reduced_volume = moles[0] / reduced_density;
 
         let p = test_parameters(
             2.0,
@@ -827,20 +825,18 @@ mod test {
         let chain = ChainMie {
             chain_contribution: ChainContribution::TPT1y,
         };
-        let state = StateHD::new(reduced_temperature, reduced_volume, &moles.clone());
+        let state = StateHD::new(reduced_temperature, reduced_density.recip(), &dvector![1.0]);
 
-        let a_chain = chain.helmholtz_energy_density(&p, &state) / moles.sum();
+        let a_chain = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a_chain);
         assert_eq!(a_chain, -1.2671979739364336);
     }
 
     #[test]
     fn test_a_miechain() {
-        let moles = dvector![2.0];
-
         let reduced_temperature = 2.0;
         let reduced_density = 0.1;
-        let reduced_volume = moles[0] / reduced_density;
+        let reduced_volume = reduced_density.recip();
 
         let p = test_parameters(
             5.0,
@@ -853,7 +849,7 @@ mod test {
         let chain = ChainMie {
             chain_contribution: ChainContribution::TPT1y,
         };
-        let state = StateHD::new(reduced_temperature, reduced_volume, &moles.clone());
+        let state = StateHD::new(reduced_temperature, reduced_volume, &dvector![1.0]);
 
         let a_chain = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a_chain);
@@ -862,11 +858,11 @@ mod test {
 
     #[test]
     fn test_a_chain_mixture() {
-        let moles = dvector![0.6, 0.4] * 2.0;
+        let molefracs = dvector![0.6, 0.4];
 
         let reduced_temperature = 2.0;
         let reduced_density = 0.1;
-        let reduced_volume = moles.sum() / reduced_density;
+        let reduced_volume = 1.0 / reduced_density;
 
         let p = test_parameters_mixture(
             dvector![3.0, 2.0],
@@ -880,9 +876,9 @@ mod test {
         let chain = ChainMie {
             chain_contribution: ChainContribution::TPT1y,
         };
-        let state = StateHD::new(reduced_temperature, reduced_volume, &moles.clone());
+        let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);
 
-        let a = chain.helmholtz_energy_density(&p, &state) / moles.sum();
+        let a = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a);
         assert_eq!(a, -0.22988783790867773);
     }
