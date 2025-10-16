@@ -24,7 +24,7 @@ use crate::saftvrqmie::{SaftVRQMie, SaftVRQMieOptions};
 #[cfg(feature = "uvtheory")]
 use crate::uvtheory::python::PyUVParameters;
 #[cfg(feature = "uvtheory")]
-use crate::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, VirialOrder, CombinationRule};
+use crate::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, VirialOrder, CombinationRule, ChainContribution};
 
 use feos_core::cubic::PengRobinson;
 use feos_core::joback::Joback;
@@ -204,7 +204,7 @@ impl PyEquationOfState {
         Self(Arc::new(EquationOfState::new(ideal_gas, residual)))
     }
 
-   /// UV-Theory equation of state.
+    /// UV-Theory equation of state.
     ///
     /// Parameters
     /// ----------
@@ -218,6 +218,8 @@ impl PyEquationOfState {
     ///     Highest order of virial coefficient to consider.
     ///     Defaults to second order (original uv-theory).
     /// combination_rule: CombinationRule, optional
+    /// chain_contribution: ChainContribution, optional
+    ///     Type of chain term for perturbed-sphere approach
     /// max_iter_cross_assoc : unsigned integer, optional
     ///     Maximum number of iterations for cross association. Defaults to 50.
     /// tol_cross_assoc : float
@@ -231,8 +233,10 @@ impl PyEquationOfState {
     #[cfg(feature = "uvtheory")]
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, combination_rule=CombinationRule::ArithmeticPhi, max_iter_cross_assoc=50, tol_cross_assoc=1e-10),    
-        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule, max_iter_cross_assoc, tol_cross_assoc)"
+        signature = (parameters, max_eta=0.5, perturbation=Perturbation::WeeksChandlerAndersen, virial_order=VirialOrder::Second, 
+            combination_rule=CombinationRule::OneFluidPsi, chain_contribution=ChainContribution::TPT1y, 
+            max_iter_cross_assoc=50, tol_cross_assoc=1e-10),    
+        text_signature = "(parameters, max_eta=0.5, perturbation, virial_order, combination_rule, chain_contribution, max_iter_cross_assoc, tol_cross_assoc)"
     )]
     fn uvtheory(
         parameters: PyUVParameters,
@@ -240,6 +244,7 @@ impl PyEquationOfState {
         perturbation: Perturbation,
         virial_order: VirialOrder,
         combination_rule:CombinationRule,
+        chain_contribution:ChainContribution,
         max_iter_cross_assoc: usize,
         tol_cross_assoc: f64,
         //dq_variant: DQVariants,
@@ -249,6 +254,7 @@ impl PyEquationOfState {
             perturbation,
             virial_order,
             combination_rule,
+            chain_contribution,
             max_iter_cross_assoc,
             tol_cross_assoc,
             //dq_variant,

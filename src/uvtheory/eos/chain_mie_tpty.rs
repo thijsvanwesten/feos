@@ -2,6 +2,7 @@ use super::hard_sphere_wca::{diameter_wca, dimensionless_diameter_q_wca, packing
 // use crate::uvtheory::eos::hard_sphere_bh::{packing_fraction_a, packing_fraction_b, zeta};
 use crate::uvtheory::eos::hard_sphere_wca::{diameter_wca_i, packing_fraction_a_ij, packing_fraction_b_ij, zeta};
 use crate::uvtheory::parameters::*;
+use crate::uvtheory::eos::ChainContribution;
 use feos_core::{HelmholtzEnergyDual, StateHD};
 use ndarray::{Array1, Array2};
 use num_dual::DualNum;
@@ -11,6 +12,7 @@ use std::{f64::consts::FRAC_PI_6, f64::consts::PI, sync::Arc};
 #[derive(Clone)]
 pub struct ChainMie {
     pub parameters: Arc<UVParameters>,
+    pub chain_contribution: ChainContribution,
 }
 
 impl fmt::Display for ChainMie {
@@ -33,6 +35,17 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
         let z2t = (x * m * d.mapv(|di| di.powi(2))).sum() * FRAC_PI_6;
         let z2 = state.partial_density.sum() * z2t;
         let mut a = D::zero();
+
+
+        // TPT1-y? Else TPT1.
+        let l_tpt1y = match self.chain_contribution {
+            ChainContribution::TPT1y => {
+                true
+            }
+            ChainContribution::TPT1 => {
+                false
+            }
+        };
 
         for i in 0..n {
             
@@ -77,7 +90,7 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ChainMie {
             //-----------------
             // TPT1-y (homo-segmented) 
             //-----------------
-            if p.m[i] > 2.0 {
+            if p.m[i] > 2.0 && l_tpt1y {
 
                 let fac1 = (m[i] - 1.0) / m[i];
                 let fac3 = (m[i] - 2.0) / m[i];
@@ -738,6 +751,7 @@ mod test {
         let p = test_parameters(2.0, 12.0, 6.0, 1.0, 1.0);
         let chain = ChainMie {
             parameters: Arc::new(p.clone()),
+            chain_contribution: ChainContribution::TPT1y
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
 
@@ -757,6 +771,7 @@ mod test {
         let p = test_parameters(5.0, 18.0, 6.0, 1.0, 1.0);
         let chain = ChainMie {
             parameters: Arc::new(p.clone()),
+            chain_contribution: ChainContribution::TPT1y
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
 
@@ -795,6 +810,7 @@ mod test {
         .unwrap();
         let chain = ChainMie {
             parameters: Arc::new(p.clone()),
+            chain_contribution: ChainContribution::TPT1y
         };
         let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
 

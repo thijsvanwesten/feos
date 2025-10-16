@@ -1,5 +1,5 @@
 use super::parameters::{NoRecord, UVBinaryRecord, UVParameters, UVRecord};
-use super::{CombinationRule, Perturbation, VirialOrder};
+use super::{CombinationRule, Perturbation, VirialOrder, ChainContribution};
 use feos_core::parameter::{
     BinaryRecord, Identifier, IdentifierOption, Parameter, ParameterError, PureRecord,
 };
@@ -380,6 +380,7 @@ pub fn uvtheory(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<Perturbation>()?;
     m.add_class::<VirialOrder>()?;
     m.add_class::<CombinationRule>()?;
+    m.add_class::<ChainContribution>()?;
     m.add_class::<PyUVRecord>()?;
     m.add_class::<PyPureRecord>()?;
     m.add_class::<PyBinaryRecord>()?;

@@ -56,6 +56,14 @@ pub enum Perturbation {
     WeeksChandlerAndersenTPT,
 }
 
+/// Type of TPT model
+#[derive(Clone)]
+#[cfg_attr(feature = "python", pyo3::pyclass)]
+pub enum ChainContribution {
+    TPT1,
+    TPT1y,
+}
+
 /// Order of the highest virial coefficient included in the model.
 #[derive(Clone)]
 #[cfg_attr(feature = "python", pyo3::pyclass)]
@@ -71,6 +79,7 @@ pub struct UVTheoryOptions {
     pub perturbation: Perturbation,
     pub virial_order: VirialOrder,
     pub combination_rule: CombinationRule,
+    pub chain_contribution: ChainContribution,
     pub max_iter_cross_assoc: usize,
     pub tol_cross_assoc: f64,
     //pub dq_variant: DQVariants,
@@ -82,7 +91,8 @@ impl Default for UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Second,
-            combination_rule: CombinationRule::OneFluidPsi, //ArithmeticPhi,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -163,6 +173,12 @@ impl UVTheory {
                                     .to_string(),
                             ));
                         }
+                        if parameters.m[0] > 1.0 {
+                            return Err(EosError::Error(
+                                "Third virial coefficient is not implemented for chains!"
+                                    .to_string(),
+                            ));
+                        }
                         contributions.push(Box::new(ReferencePerturbationUVB3 {
                             parameters: parameters.clone(),
                         }));
@@ -186,28 +202,15 @@ impl UVTheory {
                             combination_rule: options.combination_rule.clone(),
                         }));
                         contributions.push(Box::new(ChainMie {
-                            parameters: parameters.clone(), 
+                            parameters: parameters.clone(),
+                            chain_contribution: options.chain_contribution.clone()
                         }));
                     }
                     VirialOrder::Third => {
-                        if parameters.sigma.len() > 1 {
-                            return Err(EosError::Error(
+                        return Err(EosError::Error(
                                 "Third virial coefficient is not implemented for mixtures!"
                                     .to_string(),
-                            ));
-                        }
-                        if parameters.att[0] != 6.0 {
-                            return Err(EosError::Error(
-                                "Third virial coefficient is not implemented for attractive exponents other than 6!"
-                                    .to_string(),
-                            ));
-                        }
-                        contributions.push(Box::new(ReferencePerturbationUVB3 {
-                            parameters: parameters.clone(),
-                        }));
-                        contributions.push(Box::new(AttractivePerturbationUVB3 {
-                            parameters: parameters.clone(),
-                        }));
+                        ));    
                     }
                 }
             }            
@@ -286,7 +289,7 @@ mod test {
     use feos_core::parameter::{Identifier, Parameter, PureRecord};
     use feos_core::State;
     use ndarray::arr1;
-    use quantity::si::{ANGSTROM, KB, KELVIN, MOL, NAV, RGAS};
+    use quantity::si::{ANGSTROM, KELVIN, MOL, NAV, RGAS};
 
     #[test]
     fn helmholtz_energy_pure_bh_contributions() -> EosResult<()> {
@@ -296,6 +299,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -354,6 +358,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -426,6 +431,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -460,6 +466,7 @@ mod test {
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Third,
             combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -522,6 +529,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::ArithmeticPhi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,
@@ -623,6 +631,7 @@ mod test {
             perturbation: Perturbation::WeeksChandlerAndersenTPT,
             virial_order: VirialOrder::Second,
             combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
             //dq_variant: DQVariants::DQ35,

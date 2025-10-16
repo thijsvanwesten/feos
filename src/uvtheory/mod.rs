@@ -67,7 +67,7 @@
 mod eos;
 mod parameters;
 
-pub use eos::{CombinationRule, Perturbation, UVTheory, UVTheoryOptions, VirialOrder};
+pub use eos::{CombinationRule, Perturbation, UVTheory, UVTheoryOptions, VirialOrder, ChainContribution};
 pub use parameters::{UVBinaryRecord, UVParameters, UVRecord};
 
 #[cfg(feature = "python")]
