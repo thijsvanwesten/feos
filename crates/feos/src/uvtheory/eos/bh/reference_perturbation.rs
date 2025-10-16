@@ -51,7 +51,7 @@ mod test {
         let reduced_temperature = 4.0;
         let reduced_density = 1.0;
 
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0, Perturbation::BarkerHenderson);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0, Perturbation::BarkerHenderson);
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &dvector![1.0]);
         let a = ReferencePerturbation.helmholtz_energy_density(&p, &state) / reduced_density;
         assert_relative_eq!(a, -0.0611105573289734, epsilon = 1e-10);

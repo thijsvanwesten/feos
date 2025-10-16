@@ -1,6 +1,4 @@
-use crate::uvtheory::parameters::UVTheoryPars;
-
-use super::parameters::UVTheoryParameters;
+use super::parameters::{UVTheoryParameters, UVTheoryPars};
 use feos_core::{Molarweight, ResidualDyn, Subset};
 use nalgebra::DVector;
 use num_dual::DualNum;
@@ -11,6 +9,17 @@ mod bh;
 pub use bh::BarkerHenderson;
 mod wca;
 pub use wca::{WeeksChandlerAndersen, WeeksChandlerAndersenB3};
+pub mod wca_tpt;
+pub use wca_tpt::WeeksChandlerAndersenTPT;
+
+/// Type of Combination Rule.
+#[derive(Debug, Clone)]
+pub enum CombinationRule {
+    ArithmeticPhi,
+    GeometricPhi,
+    GeometricPsi,
+    OneFluidPsi,
+}
 
 /// Type of perturbation.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -18,6 +27,13 @@ pub enum Perturbation {
     BarkerHenderson,
     WeeksChandlerAndersen,
     WeeksChandlerAndersenB3,
+    WeeksChandlerAndersenTPT,
+}
+
+#[derive(Clone)]
+pub enum ChainContribution {
+    TPT1,
+    TPT1y,
 }
 
 /// Configuration options for uv-theory
@@ -25,13 +41,21 @@ pub enum Perturbation {
 pub struct UVTheoryOptions {
     pub max_eta: f64,
     pub perturbation: Perturbation,
+    pub combination_rule: CombinationRule,
+    pub chain_contribution: ChainContribution,
+    pub max_iter_cross_assoc: usize,
+    pub tol_cross_assoc: f64,
 }
 
 impl Default for UVTheoryOptions {
     fn default() -> Self {
         Self {
             max_eta: 0.5,
-            perturbation: Perturbation::WeeksChandlerAndersen,
+            perturbation: Perturbation::WeeksChandlerAndersenTPT,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         }
     }
 }
@@ -91,6 +115,8 @@ impl ResidualDyn for UVTheory {
             Perturbation::WeeksChandlerAndersenB3 => {
                 WeeksChandlerAndersenB3.residual_helmholtz_energy_contributions(&self.params, state)
             }
+            Perturbation::WeeksChandlerAndersenTPT => WeeksChandlerAndersenTPT
+                .residual_helmholtz_energy_contributions(&self.params, state),
         }
     }
 }
@@ -105,7 +131,9 @@ impl Molarweight for UVTheory {
 #[expect(clippy::excessive_precision)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{new_simple, test_parameters_mixture};
+    use crate::uvtheory::parameters::utils::{
+        new_simple, test_parameters, test_parameters_mixture,
+    };
     use crate::uvtheory::parameters::*;
     use approx::assert_relative_eq;
     use feos_core::parameter::{Identifier, PureRecord};
@@ -118,7 +146,7 @@ mod test {
     fn helmholtz_energy_pure_wca() -> FeosResult<()> {
         let sig = 3.7039;
         let eps_k = 150.03;
-        let parameters = new_simple(24.0, 6.0, sig, eps_k);
+        let parameters = new_simple(1.0, 24.0, 6.0, sig, eps_k);
         let eos = &UVTheory::new(parameters);
 
         let reduced_temperature = 4.0;
@@ -138,10 +166,14 @@ mod test {
         let sig = 3.7039;
         let rep = 24.0;
         let att = 6.0;
-        let parameters = new_simple(rep, att, sig, eps_k);
+        let parameters = new_simple(1.0, rep, att, sig, eps_k);
         let options = UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = &UVTheory::with_options(parameters, options);
 
@@ -164,10 +196,14 @@ mod test {
         let sig = 3.7039;
         let rep = 12.0;
         let att = 6.0;
-        let parameters = new_simple(rep, att, sig, eps_k);
+        let parameters = new_simple(1.0, rep, att, sig, eps_k);
         let options = UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersenB3,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = &UVTheory::with_options(parameters, options);
 
@@ -190,13 +226,13 @@ mod test {
         let rep1 = 24.0;
         let eps_k1 = 150.03;
         let sig1 = 3.7039;
-        let r1 = UVTheoryRecord::new(rep1, 6.0, sig1, eps_k1);
+        let r1 = UVTheoryRecord::new(1.0, rep1, 6.0, sig1, eps_k1);
         let i = Identifier::new(None, None, None, None, None, None);
         // compontent 2
         let rep2 = 24.0;
         let eps_k2 = 150.03;
         let sig2 = 3.7039;
-        let r2 = UVTheoryRecord::new(rep2, 6.0, sig2, eps_k2);
+        let r2 = UVTheoryRecord::new(1.0, rep2, 6.0, sig2, eps_k2);
         let j = Identifier::new(None, None, None, None, None, None);
         //////////////
 
@@ -217,6 +253,10 @@ mod test {
         let options = UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
 
         let eos_bh = &UVTheory::with_options(uv_parameters, options);
@@ -231,6 +271,7 @@ mod test {
     #[test]
     fn helmholtz_energy_wca_mixture() -> FeosResult<()> {
         let parameters = test_parameters_mixture(
+            dvector![1.0, 1.0],
             dvector![12.0, 12.0],
             dvector![6.0, 6.0],
             dvector![1.0, 1.0],
@@ -259,6 +300,7 @@ mod test {
     #[test]
     fn helmholtz_energy_wca_mixture_different_sigma() -> FeosResult<()> {
         let parameters = test_parameters_mixture(
+            dvector![1.0, 1.0],
             dvector![12.0, 12.0],
             dvector![6.0, 6.0],
             dvector![1.0, 2.0],
@@ -280,6 +322,42 @@ mod test {
         let state_wca = State::new_nvt(&eos_wca, t_x, volume, &moles).unwrap();
         let a_wca = (state_wca.residual_molar_helmholtz_energy() / (RGAS * t_x)).into_value();
         assert_relative_eq!(a_wca, -0.034206207363139396, max_relative = 1e-5);
+        Ok(())
+    }
+
+    #[test]
+    fn helmholtz_energy_pure_miechain() -> FeosResult<()> {
+        let sig = 1.0;
+        let eps_k = 1.0;
+        let parameters = new_simple(5.0, 24.0, 6.0, sig, eps_k);
+
+        let options = UVTheoryOptions {
+            max_eta: 0.5,
+            perturbation: Perturbation::WeeksChandlerAndersenTPT,
+            combination_rule: CombinationRule::OneFluidPsi,
+            chain_contribution: ChainContribution::TPT1y,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
+        };
+        let eos = &UVTheory::with_options(parameters, options);
+
+        let reduced_temperature = 2.0;
+        let reduced_density = 0.15;
+        let temperature = reduced_temperature * eps_k * KELVIN;
+        let moles = dvector![2.0] * MOL;
+        let volume = (sig * ANGSTROM).powi::<P3>() / reduced_density * NAV * 2.0 * MOL;
+        let s = State::new_nvt(&eos, temperature, volume, &moles).unwrap();
+        let a = (s.residual_helmholtz_energy() / (s.total_moles * RGAS * temperature)).into_value();
+
+        let contributions = s.residual_molar_helmholtz_energy_contributions();
+
+        for (name, value) in contributions.iter() {
+            let a_red = (value / (RGAS * s.temperature)).into_value();
+            println!("{:<30}: A / NkT = {:>.10}", &name, a_red);
+        }
+
+        assert_relative_eq!(a, 0.93410937628984314, max_relative = 1e-9);
+        // assert_relative_eq!(a, 0.18900517901738298, max_relative = 1e-12);
         Ok(())
     }
 }

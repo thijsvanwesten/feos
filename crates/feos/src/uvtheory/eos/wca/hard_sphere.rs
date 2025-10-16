@@ -252,7 +252,7 @@ mod test {
 
     #[test]
     fn test_wca_diameter() {
-        let p = test_parameters(24.0, 6.0, 2.0, 1.0, WCA);
+        let p = test_parameters(1.0, 24.0, 6.0, 2.0, 1.0, WCA);
         let temp = 4.0;
         assert_eq!(
             WeeksChandlerAndersen::diameter_wca(&p, temp)[0] / p.sigma[0],
@@ -293,6 +293,7 @@ mod test {
 
         let p = UVTheoryPars::new(
             &test_parameters_mixture(
+                dvector![1.0, 1.0],
                 dvector![12.0, 12.0],
                 dvector![6.0, 6.0],
                 dvector![1.0, 1.0],

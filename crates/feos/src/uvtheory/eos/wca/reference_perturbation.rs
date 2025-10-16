@@ -69,7 +69,7 @@ mod test {
         let reduced_temperature = 4.0;
         let reduced_density = 1.0;
 
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0, WCA);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0, WCA);
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &dvector![1.0]);
         let a = ReferencePerturbation.helmholtz_energy_density(&p, &state) / reduced_density;
         assert_relative_eq!(a, 0.258690311450425, epsilon = 1e-10);
@@ -83,6 +83,7 @@ mod test {
 
         let p = UVTheoryPars::new(
             &test_parameters_mixture(
+                dvector![1.0, 1.0],
                 dvector![12.0, 12.0],
                 dvector![6.0, 6.0],
                 dvector![1.0, 1.0],

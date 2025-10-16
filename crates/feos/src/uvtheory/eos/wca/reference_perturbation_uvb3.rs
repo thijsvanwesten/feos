@@ -71,7 +71,7 @@ mod test {
         let reduced_temperature = 2.0;
         let reduced_density = 0.5;
 
-        let p = test_parameters(12.0, 6.0, 1.0, 1.0, WCAB3);
+        let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0, WCAB3);
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &dvector![1.0]);
         let a = ReferencePerturbationB3.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(a);
@@ -83,7 +83,7 @@ mod test {
         let reduced_temperature = 3.0;
         let reduced_density = 1.1;
 
-        let p = test_parameters(20.0, 6.0, 1.0, 1.0, WCAB3);
+        let p = test_parameters(1.0, 20.0, 6.0, 1.0, 1.0, WCAB3);
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &dvector![1.0]);
         let a = ReferencePerturbationB3.helmholtz_energy_density(&p, &state) / reduced_density;
 

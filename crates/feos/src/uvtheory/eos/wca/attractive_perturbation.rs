@@ -351,6 +351,7 @@ mod test {
 
         let p = UVTheoryPars::new(
             &test_parameters_mixture(
+                dvector![1.0, 1.0],
                 dvector![12.0, 12.0],
                 dvector![6.0, 6.0],
                 dvector![1.0, 1.0],
@@ -415,6 +416,7 @@ mod test {
         let volume = 1.0 / density;
         let p = UVTheoryPars::new(
             &test_parameters_mixture(
+                dvector![1.0, 1.0],
                 dvector![12.0, 12.0],
                 dvector![6.0, 6.0],
                 dvector![1.0, 2.0],

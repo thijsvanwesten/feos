@@ -106,12 +106,12 @@ mod test {
 
     #[test]
     fn test_bh_diameter() {
-        let p = test_parameters(12.0, 6.0, 1.0, 1.0, BH);
+        let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0, BH);
         assert_eq!(
             BarkerHenderson::diameter_bh(&p, 2.0)[0],
             0.95777257352360246
         );
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0, BH);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0, BH);
         assert_eq!(
             BarkerHenderson::diameter_bh(&p, 5.0)[0],
             0.95583586434435486

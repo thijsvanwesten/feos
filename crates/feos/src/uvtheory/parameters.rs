@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// uv-theory parameters for a pure substance
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct UVTheoryRecord {
+    m: f64,
     rep: f64,
     att: f64,
     sigma: f64,
@@ -16,8 +17,9 @@ pub struct UVTheoryRecord {
 
 impl UVTheoryRecord {
     /// Single substance record for uv-theory
-    pub fn new(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
+    pub fn new(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
         Self {
+            m,
             rep,
             att,
             sigma,
@@ -50,6 +52,7 @@ pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, ()>;
 #[derive(Debug, Clone)]
 pub struct UVTheoryPars {
     pub perturbation: Perturbation,
+    pub m: DVector<f64>,
     pub rep: DVector<f64>,
     pub att: DVector<f64>,
     pub sigma: DVector<f64>,
@@ -66,8 +69,8 @@ impl UVTheoryPars {
     pub fn new(parameters: &UVTheoryParameters, perturbation: Perturbation) -> Self {
         let n = parameters.pure.len();
 
-        let [rep, att, sigma, epsilon_k] =
-            parameters.collate(|pr| [pr.rep, pr.att, pr.sigma, pr.epsilon_k]);
+        let [m, rep, att, sigma, epsilon_k] =
+            parameters.collate(|pr| [pr.m, pr.rep, pr.att, pr.sigma, pr.epsilon_k]);
 
         let mut rep_ij = DMatrix::zeros(n, n);
         let mut att_ij = DMatrix::zeros(n, n);
@@ -98,6 +101,7 @@ impl UVTheoryPars {
 
         Self {
             perturbation,
+            m,
             rep,
             att,
             sigma,
@@ -136,6 +140,9 @@ impl HardSphereProperties for UVTheoryPars {
             Perturbation::WeeksChandlerAndersenB3 => {
                 WeeksChandlerAndersen::diameter_wca(self, temperature)
             }
+            Perturbation::WeeksChandlerAndersenTPT => {
+                super::wca_tpt::hard_sphere_wca::diameter_wca(self, temperature)
+            }
         }
     }
 }
@@ -146,16 +153,17 @@ pub mod utils {
     use feos_core::parameter::{Identifier, PureRecord};
     use std::f64;
 
-    pub fn new_simple(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> UVTheoryParameters {
+    pub fn new_simple(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> UVTheoryParameters {
         UVTheoryParameters::new_pure(PureRecord::new(
             Default::default(),
             0.0,
-            UVTheoryRecord::new(rep, att, sigma, epsilon_k),
+            UVTheoryRecord::new(m, rep, att, sigma, epsilon_k),
         ))
         .unwrap()
     }
 
     pub fn test_parameters(
+        m: f64,
         rep: f64,
         att: f64,
         sigma: f64,
@@ -163,30 +171,31 @@ pub mod utils {
         p: Perturbation,
     ) -> UVTheoryPars {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record = UVTheoryRecord::new(rep, att, sigma, epsilon);
+        let model_record = UVTheoryRecord::new(m, rep, att, sigma, epsilon);
         let pr = PureRecord::new(identifier, 1.0, model_record);
         UVTheoryPars::new(&UVTheoryParameters::new_pure(pr).unwrap(), p)
     }
 
     pub fn test_parameters_mixture(
+        m: DVector<f64>,
         rep: DVector<f64>,
         att: DVector<f64>,
         sigma: DVector<f64>,
         epsilon: DVector<f64>,
     ) -> UVTheoryParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record = UVTheoryRecord::new(rep[0], att[0], sigma[0], epsilon[0]);
+        let model_record = UVTheoryRecord::new(m[0], rep[0], att[0], sigma[0], epsilon[0]);
         let pr1 = PureRecord::new(identifier, 1.0, model_record);
         //
         let identifier2 = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record2 = UVTheoryRecord::new(rep[1], att[1], sigma[1], epsilon[1]);
+        let model_record2 = UVTheoryRecord::new(m[1], rep[1], att[1], sigma[1], epsilon[1]);
         let pr2 = PureRecord::new(identifier2, 1.0, model_record2);
         UVTheoryParameters::new_binary([pr1, pr2], None, vec![]).unwrap()
     }
 
     pub fn methane_parameters(rep: f64, att: f64) -> UVTheoryParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
-        let model_record = UVTheoryRecord::new(rep, att, 3.7039, 150.03);
+        let model_record = UVTheoryRecord::new(1.0, rep, att, 3.7039, 150.03);
         let pr = PureRecord::new(identifier, 1.0, model_record);
         UVTheoryParameters::new_pure(pr).unwrap()
     }
