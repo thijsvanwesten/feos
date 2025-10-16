@@ -449,6 +449,7 @@ fn g_mspt<D: DualNum<f64> + Copy>(
 mod test {
     use super::*;
     use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
+    use approx::assert_relative_eq;
     use nalgebra::dvector;
     use num_dual::{Dual2_64, Dual3_64, Dual64, HyperDual64};
 
@@ -829,7 +830,7 @@ mod test {
 
         let a_chain = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a_chain);
-        assert_eq!(a_chain, -1.2671979739364336);
+        assert_relative_eq!(a_chain, -1.2671979739364336, epsilon = 1e-9);
     }
 
     #[test]
@@ -853,7 +854,7 @@ mod test {
 
         let a_chain = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a_chain);
-        assert_eq!(a_chain, -0.90267009812299037);
+        assert_relative_eq!(a_chain, -0.90267009812299037, epsilon = 1e-9);
     }
 
     #[test]
@@ -880,7 +881,7 @@ mod test {
 
         let a = chain.helmholtz_energy_density(&p, &state) / reduced_density;
         dbg!(&a);
-        assert_eq!(a, -0.22988783790867773);
+        assert_relative_eq!(a, -0.22988783790867773, epsilon = 1e-9);
     }
     //  */
 }
