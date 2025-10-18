@@ -1,5 +1,4 @@
 use super::hard_sphere_wca::{diameter_wca, dimensionless_diameter_q_wca, packing_fraction};
-// use crate::uvtheory::eos::hard_sphere_bh::{packing_fraction_a, packing_fraction_b, zeta};
 use super::hard_sphere_wca::{diameter_wca_i, packing_fraction_a_ij, packing_fraction_b_ij, zeta};
 use crate::uvtheory::eos::ChainContribution;
 use crate::uvtheory::parameters::*;
@@ -59,7 +58,7 @@ impl ChainMie {
         let zms2 = zms * zms;
         
         // let z2t = (x * m * d.mapv(|di| di.powi(2))).sum() * FRAC_PI_6;
-        let z2t = (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * d[i].powi(2)) * FRAC_PI_6;
+        let z2t = (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * d[i].powi(2)) * FRAC_PI_6;        
         let z2 = density * z2t;
         let rho_st = density * (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * p.sigma[i].powi(3));
 
@@ -78,7 +77,7 @@ impl ChainMie {
 
             // CCF WCA fluid (MF1 theory)
             let y_wca_sigma = y_wca_aroundcontact_mix(
-                D::one(),
+                1.0,
                 &p,
                 eta,
                 &state.partial_density,
@@ -175,7 +174,7 @@ impl ChainMie {
 // CCF of two WCA monomers of index i and j in a WCA fluid mixture at reduced distance r/sigma.
 // NB temperature is dimensional.
 fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
-    r_st: D,
+    r_st: f64,
     p: &UVTheoryPars,
     eta: D,
     partial_density: &DVector<D>,
@@ -191,7 +190,7 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     let t_st = temperature * p.eps_k_ij[(i, j)].recip();
     let d_hs = (dhs[i] + dhs[j]) * 0.5;
 
-    let yhs_r = y_hf(&partial_density, &mseg, &dhs, i, j, r_st * sigma / d_hs);
+    let yhs_r = y_hf(&partial_density, &mseg, &dhs, i, j, d_hs.recip() * r_st * sigma);
     let yhs_d = y_hf(&partial_density, &mseg, &dhs, i, j, D::one());
 
     // Effective packing fractions (+derivatives) for first-order Mayer-f perturbation term in Helmholz energy da01
@@ -313,18 +312,19 @@ fn y_hf<D: DualNum<f64> + Copy>(
     //-------------------
     // CCF at HS contact
     //-------------------
-    let mut y1 = DMatrix::<D>::zeros(n, n);
-    for i in 0..n {
-        for j in 0..n {
-            let dij = d[i] * d[j] * (d[i] + d[j]).recip();
-            y1[(i, j)] = zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2);
-        }
-    }
-    // Use this?
-    // let y1 = DMatrix::from_fn(n, n, |i, j| {
-    //     let dij = d[i] * d[j] * (d[i] + d[j]).recip();
-    //     y1[(i, j)] = zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2);
-    // });
+    // let mut y1 = DMatrix::<D>::zeros(n, n);
+    // for i in 0..n {
+    //     for j in 0..n {
+    //         let dij = d[i] * d[j] * (d[i] + d[j]).recip();
+    //         y1[(i, j)] = zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2);
+    //     }
+    // }
+    
+    
+    let y1 = DMatrix::from_fn(n, n, |i, j| {
+        let dij = d[i] * d[j] * (d[i] + d[j]).recip();
+        zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2)
+    });
 
     //-------------------
     // derivative of log(CCF) to r at zero separation
@@ -336,6 +336,13 @@ fn y_hf<D: DualNum<f64> + Copy>(
             dlog_y0[i] -= partial_density[k] * mseg[k] * y1[(i, k)] * dik * dik * PI;
         }
     }
+
+    // let dlog_y0 = DVector::from_fn(n, |i, _| {
+    //     (0..n).fold(D::zero(),|z,k| {
+    //         let dik = (d[i] + d[k]) * 0.5;
+    //         z - partial_density[k] * mseg[k] * y1[(i, k)] * dik * dik * PI
+    //     })
+    // });
 
     //-------------------
     // log(CCF) at zero separation (from chemical potential of HS in a HS-mixture)
