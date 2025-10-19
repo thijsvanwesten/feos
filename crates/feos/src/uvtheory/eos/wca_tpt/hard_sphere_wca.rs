@@ -183,38 +183,14 @@ pub(super) fn zeta_23<D: DualNum<f64> + Copy>(
     zeta[0] / zeta[1]
 }
 
-// #[inline]
-// pub(super) fn dimensionless_length_scale<D: DualNum<f64> + Copy>(
-//     parameters: &UVTheoryPars,
-//     temperature: D,
-// ) -> DVector<D> {
-//     parameters
-//         .sigma
-//         .iter()
-//         .enumerate()
-//         .map(|(i, _c)| {
-//             let rs = (parameters.rep[i] / parameters.att[i])
-//                 .powf(1.0 / (parameters.rep[i] - parameters.att[i]));
-//             -diameter_wca(parameters, temperature)[i] + rs * parameters.sigma[i]
-//             // parameters.sigma[i]
-//         })
-//         .collect()
-// }
-
 #[inline]
 
 pub(super) fn packing_fraction_b_ij<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
+    dhs_st: D,
+    rs_st: f64,
     eta: D,
-    temperature: D,
-    i: usize,
-    j: usize,
 ) -> (D, D) {
-    let dhs_ij =
-        diameter_wca_i(parameters, temperature, i) + diameter_wca_i(parameters, temperature, j);
-    let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-        .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-    let tau = -dhs_ij / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+    let tau = -dhs_st + rs_st; //dimensionless
     let tau2 = tau * tau;
 
     let c = [
@@ -227,71 +203,19 @@ pub(super) fn packing_fraction_b_ij<D: DualNum<f64> + Copy>(
     (eta_eff, eta_eff_eta)
 }
 
-pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
-    eta: D,
-    temperature: D,
-) -> DMatrix<D> {
-    let n = parameters.att.len();
-    let diameter = diameter_wca(parameters, temperature); // with dimension
-    DMatrix::from_fn(n, n, |i, j| {
-        let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-            .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
-        let tau2 = tau * tau;
-
-        let c = [
-            tau * WCA_CONSTANTS_ETA_B[0][0] + tau2 * WCA_CONSTANTS_ETA_B[0][1],
-            tau * WCA_CONSTANTS_ETA_B[1][0] + tau2 * WCA_CONSTANTS_ETA_B[1][1],
-            tau * WCA_CONSTANTS_ETA_B[2][0] + tau2 * WCA_CONSTANTS_ETA_B[2][1],
-        ];
-        eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2]
-    })
-}
-
-pub(super) fn packing_fraction_b_uvb3<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
-    eta: D,
-    temperature: D,
-) -> DMatrix<D> {
-    let n = parameters.att.len();
-    let diameter = diameter_wca(parameters, temperature); // with dimension
-    DMatrix::from_fn(n, n, |i, j| {
-        // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-        //     / parameters.sigma_ij[(i, j)]
-        //     * 0.5; //dimensionless
-        let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-            .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
-        let tau2 = tau * tau;
-
-        let c = [
-            tau * WCA_CONSTANTS_ETA_B_UVB3[0][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[0][1],
-            tau * WCA_CONSTANTS_ETA_B_UVB3[1][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[1][1],
-            tau * WCA_CONSTANTS_ETA_B_UVB3[2][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[2][1],
-        ];
-        eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2]
-    })
-}
-
 pub(super) fn packing_fraction_a_ij<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
+    dhs_st: D,
+    rs_st: f64,
+    rep: f64,    
     eta: D,
-    temperature: D,
-    i: usize,
-    j: usize,
 ) -> (D, D) {
-    let dhs_ij =
-        diameter_wca_i(parameters, temperature, i) + diameter_wca_i(parameters, temperature, j);
-    let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-        .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-    let tau = -dhs_ij / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
-
+    
+    let tau = -dhs_st + rs_st;
     let tau2 = tau * tau;
-    let rep_inv = 1.0 / parameters.rep_ij[(i, j)];
+    let rep_inv = 1.0 / rep;
 
     let c = [
-        tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv)
+        tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv) 
             + tau2 * (WCA_CONSTANTS_ETA_A[0][2] + WCA_CONSTANTS_ETA_A[0][3] * rep_inv),
         tau * (WCA_CONSTANTS_ETA_A[1][0] + WCA_CONSTANTS_ETA_A[1][1] * rep_inv)
             + tau2 * (WCA_CONSTANTS_ETA_A[1][2] + WCA_CONSTANTS_ETA_A[1][3] * rep_inv),
@@ -306,70 +230,117 @@ pub(super) fn packing_fraction_a_ij<D: DualNum<f64> + Copy>(
     (eta_eff, eta_eff_eta)
 }
 
-pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
-    eta: D,
-    temperature: D,
-) -> DMatrix<D> {
-    let n = parameters.att.len();
-    let diameter = diameter_wca(parameters, temperature); // with dimension
-    DMatrix::from_fn(n, n, |i, j| {
-        // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
-        //     / parameters.sigma_ij[(i, j)]
-        //     * 0.5; //dimensionless
+// pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
+//     parameters: &UVTheoryPars,
+//     eta: D,
+//     temperature: D,
+// ) -> DMatrix<D> {
+//     let n = parameters.att.len();
+//     let diameter = diameter_wca(parameters, temperature); // with dimension
+//     DMatrix::from_fn(n, n, |i, j| {
+//         let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
+//             .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
+//         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+//         let tau2 = tau * tau;
 
-        let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-            .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+//         let c = [
+//             tau * WCA_CONSTANTS_ETA_B[0][0] + tau2 * WCA_CONSTANTS_ETA_B[0][1],
+//             tau * WCA_CONSTANTS_ETA_B[1][0] + tau2 * WCA_CONSTANTS_ETA_B[1][1],
+//             tau * WCA_CONSTANTS_ETA_B[2][0] + tau2 * WCA_CONSTANTS_ETA_B[2][1],
+//         ];
+//         eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2]
+//     })
+// }
 
-        let tau2 = tau * tau;
-        let rep_inv = 1.0 / parameters.rep_ij[(i, j)];
+// pub(super) fn packing_fraction_b_uvb3<D: DualNum<f64> + Copy>(
+//     parameters: &UVTheoryPars,
+//     eta: D,
+//     temperature: D,
+// ) -> DMatrix<D> {
+//     let n = parameters.att.len();
+//     let diameter = diameter_wca(parameters, temperature); // with dimension
+//     DMatrix::from_fn(n, n, |i, j| {
+//         // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
+//         //     / parameters.sigma_ij[(i, j)]
+//         //     * 0.5; //dimensionless
+//         let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
+//             .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
+//         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+//         let tau2 = tau * tau;
 
-        let c = [
-            tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv)
-                + tau2 * (WCA_CONSTANTS_ETA_A[0][2] + WCA_CONSTANTS_ETA_A[0][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A[1][0] + WCA_CONSTANTS_ETA_A[1][1] * rep_inv)
-                + tau2 * (WCA_CONSTANTS_ETA_A[1][2] + WCA_CONSTANTS_ETA_A[1][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A[2][0] + WCA_CONSTANTS_ETA_A[2][1] * rep_inv)
-                + tau2 * (WCA_CONSTANTS_ETA_A[2][2] + WCA_CONSTANTS_ETA_A[2][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A[3][0] + WCA_CONSTANTS_ETA_A[3][1] * rep_inv)
-                + tau2 * (WCA_CONSTANTS_ETA_A[3][2] + WCA_CONSTANTS_ETA_A[3][3] * rep_inv),
-        ];
-        eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2] + eta.powi(4) * c[3]
-    })
-}
+//         let c = [
+//             tau * WCA_CONSTANTS_ETA_B_UVB3[0][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[0][1],
+//             tau * WCA_CONSTANTS_ETA_B_UVB3[1][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[1][1],
+//             tau * WCA_CONSTANTS_ETA_B_UVB3[2][0] + tau2 * WCA_CONSTANTS_ETA_B_UVB3[2][1],
+//         ];
+//         eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2]
+//     })
+// }
 
-pub(super) fn packing_fraction_a_uvb3<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
-    eta: D,
-    temperature: D,
-) -> DMatrix<D> {
-    let n = parameters.att.len();
-    let diameter = diameter_wca(parameters, temperature); // with dimension
-    DMatrix::from_fn(n, n, |i, j| {
-        let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
-            .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
-        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+// pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
+//     parameters: &UVTheoryPars,
+//     eta: D,
+//     temperature: D,
+// ) -> DMatrix<D> {
+//     let n = parameters.att.len();
+//     let diameter = diameter_wca(parameters, temperature); // with dimension
+//     DMatrix::from_fn(n, n, |i, j| {
+//         // let tau = (dimensionless_lengths[i] + dimensionless_lengths[j])
+//         //     / parameters.sigma_ij[(i, j)]
+//         //     * 0.5; //dimensionless
 
-        let tau2 = tau * tau;
-        let rep_inv = 1.0 / parameters.rep_ij[(i, j)];
-        let c = [
-            tau * (WCA_CONSTANTS_ETA_A_UVB3[0][0] + WCA_CONSTANTS_ETA_A_UVB3[0][1] * rep_inv)
-                + tau2
-                    * (WCA_CONSTANTS_ETA_A_UVB3[0][2] + WCA_CONSTANTS_ETA_A_UVB3[0][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A_UVB3[1][0] + WCA_CONSTANTS_ETA_A_UVB3[1][1] * rep_inv)
-                + tau2
-                    * (WCA_CONSTANTS_ETA_A_UVB3[1][2] + WCA_CONSTANTS_ETA_A_UVB3[1][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A_UVB3[2][0] + WCA_CONSTANTS_ETA_A_UVB3[2][1] * rep_inv)
-                + tau2
-                    * (WCA_CONSTANTS_ETA_A_UVB3[2][2] + WCA_CONSTANTS_ETA_A_UVB3[2][3] * rep_inv),
-            tau * (WCA_CONSTANTS_ETA_A_UVB3[3][0] + WCA_CONSTANTS_ETA_A_UVB3[3][1] * rep_inv)
-                + tau2
-                    * (WCA_CONSTANTS_ETA_A_UVB3[3][2] + WCA_CONSTANTS_ETA_A_UVB3[3][3] * rep_inv),
-        ];
-        eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2] + eta.powi(4) * c[3]
-    })
-}
+//         let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
+//             .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
+//         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+
+//         let tau2 = tau * tau;
+//         let rep_inv = 1.0 / parameters.rep_ij[(i, j)];
+
+//         let c = [
+//             tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv)
+//                 + tau2 * (WCA_CONSTANTS_ETA_A[0][2] + WCA_CONSTANTS_ETA_A[0][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A[1][0] + WCA_CONSTANTS_ETA_A[1][1] * rep_inv)
+//                 + tau2 * (WCA_CONSTANTS_ETA_A[1][2] + WCA_CONSTANTS_ETA_A[1][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A[2][0] + WCA_CONSTANTS_ETA_A[2][1] * rep_inv)
+//                 + tau2 * (WCA_CONSTANTS_ETA_A[2][2] + WCA_CONSTANTS_ETA_A[2][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A[3][0] + WCA_CONSTANTS_ETA_A[3][1] * rep_inv)
+//                 + tau2 * (WCA_CONSTANTS_ETA_A[3][2] + WCA_CONSTANTS_ETA_A[3][3] * rep_inv),
+//         ];
+//         eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2] + eta.powi(4) * c[3]
+//     })
+// }
+
+// pub(super) fn packing_fraction_a_uvb3<D: DualNum<f64> + Copy>(
+//     parameters: &UVTheoryPars,
+//     eta: D,
+//     temperature: D,
+// ) -> DMatrix<D> {
+//     let n = parameters.att.len();
+//     let diameter = diameter_wca(parameters, temperature); // with dimension
+//     DMatrix::from_fn(n, n, |i, j| {
+//         let rsij = (parameters.rep_ij[(i, j)] / parameters.att_ij[(i, j)])
+//             .powf(1.0 / (parameters.rep_ij[(i, j)] - parameters.att_ij[(i, j)]));
+//         let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + rsij; //dimensionless
+
+//         let tau2 = tau * tau;
+//         let rep_inv = 1.0 / parameters.rep_ij[(i, j)];
+//         let c = [
+//             tau * (WCA_CONSTANTS_ETA_A_UVB3[0][0] + WCA_CONSTANTS_ETA_A_UVB3[0][1] * rep_inv)
+//                 + tau2
+//                     * (WCA_CONSTANTS_ETA_A_UVB3[0][2] + WCA_CONSTANTS_ETA_A_UVB3[0][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A_UVB3[1][0] + WCA_CONSTANTS_ETA_A_UVB3[1][1] * rep_inv)
+//                 + tau2
+//                     * (WCA_CONSTANTS_ETA_A_UVB3[1][2] + WCA_CONSTANTS_ETA_A_UVB3[1][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A_UVB3[2][0] + WCA_CONSTANTS_ETA_A_UVB3[2][1] * rep_inv)
+//                 + tau2
+//                     * (WCA_CONSTANTS_ETA_A_UVB3[2][2] + WCA_CONSTANTS_ETA_A_UVB3[2][3] * rep_inv),
+//             tau * (WCA_CONSTANTS_ETA_A_UVB3[3][0] + WCA_CONSTANTS_ETA_A_UVB3[3][1] * rep_inv)
+//                 + tau2
+//                     * (WCA_CONSTANTS_ETA_A_UVB3[3][2] + WCA_CONSTANTS_ETA_A_UVB3[3][3] * rep_inv),
+//         ];
+//         eta + eta * c[0] + eta * eta * c[1] + eta.powi(3) * c[2] + eta.powi(4) * c[3]
+//     })
+// }
 
 #[cfg(test)]
 mod test {

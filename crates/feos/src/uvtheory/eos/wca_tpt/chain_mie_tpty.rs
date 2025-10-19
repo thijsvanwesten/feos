@@ -184,18 +184,24 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     j: usize,
 ) -> D {
     let mseg = &p.m;
-    let m_mie = p.rep_ij[(i, j)];
-    let n_mie = p.att_ij[(i, j)];
+    let rep = p.rep_ij[(i, j)];
+    let att = p.att_ij[(i, j)];
     let sigma = p.sigma_ij[(i, j)];
-    let t_st = temperature * p.eps_k_ij[(i, j)].recip();
+    let t_st = temperature / p.eps_k_ij[(i, j)];
     let d_hs = (dhs[i] + dhs[j]) * 0.5;
 
     let yhs_r = y_hf(&partial_density, &mseg, &dhs, i, j, d_hs.recip() * r_st * sigma);
     let yhs_d = y_hf(&partial_density, &mseg, &dhs, i, j, D::one());
+    
+    let d_st = d_hs / sigma;
+    let d_st_3 = d_st.powi(3);
+    let q_st_3 = dimensionless_diameter_q_wca(t_st, D::one() * rep, D::one() * att).powi(3);
+    let rm_st = (rep / att).powf((rep - att).recip() );
+    let rm_st_3 = rm_st.powi(3);
 
     // Effective packing fractions (+derivatives) for first-order Mayer-f perturbation term in Helmholz energy da01
-    let (eta_a, eta_a_eta) = packing_fraction_a_ij(p, eta, temperature, i, j);
-    let (eta_b, eta_b_eta) = packing_fraction_b_ij(p, eta, temperature, i, j);
+    let (eta_a, eta_a_eta) = packing_fraction_a_ij(d_st, rm_st, rep, eta);
+    let (eta_b, eta_b_eta) = packing_fraction_b_ij(d_st, rm_st, eta);
 
     let zms_a = D::one() / (D::one() - eta_a);
     let zms_b = D::one() / (D::one() - eta_b);
@@ -209,18 +215,13 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
         (-eta_b_eta / 2.0) * zms_b3 + (D::from(3.0) - eta_b * 1.5) * eta_b_eta * zms_b3 * zms_b;
 
     // Effective packing fraction specific to this routine
-    let eta_c = packing_fraction_c_ij(p, eta, temperature, i, j);
+    let eta_c = packing_fraction_c_ij(d_st, rm_st, rep, eta);
     let yhs_c = (D::one() - eta_c / 2.0) / (D::one() - eta_c).powi(3);
 
-    // following three parameters are dimensionless
-    let d3 = (d_hs / sigma).powi(3);
-    let q3 = dimensionless_diameter_q_wca(t_st, D::one() * m_mie, D::one() * n_mie).powi(3);
-    let rm3 = D::one() * (m_mie / n_mie).powd((m_mie - n_mie).recip()).powi(3);
-
     // y01
-    let integral1 = -yhs_c * q3 / d3;
-    let fac1 = (rm3 - q3) / d3;
-    let fac2 = (rm3 - d3) / d3;
+    let integral1 = -yhs_c * q_st_3 / d_st_3;
+    let fac1 = (-q_st_3 + rm_st_3) / d_st_3;
+    let fac2 = (-d_st_3 + rm_st_3) / d_st_3;
     let integral2 = -eta * (yhs_a_eta * fac1 - yhs_b_eta * fac2) - (yhs_a * fac1 - yhs_b * fac2);
     let yhs_cs = (D::one() - eta * 0.5) / (D::one() - eta).powi(3);
     let y01 = integral1 + integral2 + yhs_cs;
@@ -232,21 +233,14 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
 // Effective packing fraction specific to CCF of WCA fluid around contact
 // pub(super)
 fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(
-    parameters: &UVTheoryPars,
+    dhs_st: D,
+    rmin_st: f64,
+    rep: f64,    
     eta: D,
-    temperature: D,
-    i: usize,
-    j: usize,
 ) -> D {
-    let rep = parameters.rep_ij[(i, j)];
-    let att = parameters.att_ij[(i, j)];
+    let tau = -dhs_st + rmin_st;
     let rep_inv = 1.0 / rep;
     let rep_inv2 = rep_inv * rep_inv;
-
-    let dhs =
-        diameter_wca_i(parameters, temperature, i) + diameter_wca_i(parameters, temperature, j);
-    let rmin = (rep / att).powf(1.0 / (rep - att));
-    let tau = -dhs / (parameters.sigma[i] + parameters.sigma[j]) + rmin; //dimensionless
 
     let para_ic = [
         -2.43121181e-01,
