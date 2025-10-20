@@ -3,7 +3,7 @@ use crate::uvtheory::parameters::*;
 use feos_core::StateHD;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
-use std::{fmt, f64::consts::PI};
+use std::{f64::consts::PI, fmt};
 
 const C_WCA: [[f64; 6]; 6] = [
     [
@@ -79,8 +79,8 @@ impl AttractivePerturbationWCA {
     pub fn helmholtz_energy_density<D: DualNum<f64> + Copy>(
         &self,
         parameters: &UVTheoryPars,
-        state: &StateHD<D>
-    )->D{
+        state: &StateHD<D>,
+    ) -> D {
         // Exact b21u? or based on vdws one-fluid temperature? Tests are based on vdws one-fluid...
         let exact_b21u = false;
 
@@ -89,53 +89,56 @@ impl AttractivePerturbationWCA {
         let x = &state.molefracs;
         let t = state.temperature;
         let density = state.partial_density.sum();
-        let n = p.sigma.len();  
+        let n = p.sigma.len();
 
         // One-fluid parameters
         let (
-            _rep_x, 
-            _att_x, 
-            sigma_x, 
-            _sigma3_vdw1f, 
-            epsilon_vdw1f, 
-            d_x, 
-            m_mix, 
-            prefactor_b2, 
-            prefactor_a1u) =
-            one_fluid_properties(p, x, t);     
+            _rep_x,
+            _att_x,
+            sigma_x,
+            _sigma3_vdw1f,
+            epsilon_vdw1f,
+            d_x,
+            m_mix,
+            prefactor_b2,
+            prefactor_a1u,
+        ) = one_fluid_properties(p, x, t);
 
-        let t_x = state.temperature / epsilon_vdw1f;    // VdW-1f temperature
+        let t_x = state.temperature / epsilon_vdw1f; // VdW-1f temperature
         let rho_st = density * m_mix * sigma_x.powi(3); // dimensionless mixture density
 
         // Helmholtz energy
         let mut a = D::zero();
         for i in 0..n {
             for j in 0..n {
-                let t_ij = t / p.eps_k_ij[(i,j)];
-                let rep_ij = p.rep_ij[(i,j)];
-                let att_ij = p.att_ij[(i,j)];
-        
+                let t_ij = t / p.eps_k_ij[(i, j)];
+                let rep_ij = p.rep_ij[(i, j)];
+                let att_ij = p.att_ij[(i, j)];
+
                 let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
                 let q_ij_tx = dimensionless_diameter_q_wca(t_x, D::from(rep_ij), D::from(att_ij));
-                
-                let pref = prefactor_a1u[(i,j)] / t;
+
+                let pref = prefactor_a1u[(i, j)] / t;
 
                 // Perturbation term without its second-virial contribution...
-                a += pref * density * correlation_integral_wca_noldl(rho_st, D::from(rep_ij), D::from(att_ij), d_x);
+                a += pref
+                    * density
+                    * correlation_integral_wca_noldl(rho_st, D::from(rep_ij), D::from(att_ij), d_x);
 
                 // ...and its second-virial contribution
-                let b21u_ij = pref * ( if exact_b21u {
-                    correlation_integral_wca_ldl(D::from(rep_ij), D::from(att_ij), q_ij)                    
-                } else {
-                    correlation_integral_wca_ldl(D::from(rep_ij), D::from(att_ij), q_ij_tx)
-                } );   
+                let b21u_ij = pref
+                    * (if exact_b21u {
+                        correlation_integral_wca_ldl(D::from(rep_ij), D::from(att_ij), q_ij)
+                    } else {
+                        correlation_integral_wca_ldl(D::from(rep_ij), D::from(att_ij), q_ij_tx)
+                    });
 
                 a += b21u_ij * density;
-                
+
                 // Interpolation term
-                let b2pert_ij = prefactor_b2[(i,j)] * delta_b2(t_ij, rep_ij, att_ij, q_ij);
+                let b2pert_ij = prefactor_b2[(i, j)] * delta_b2(t_ij, rep_ij, att_ij, q_ij);
                 let psi = D::one() - u_fraction_wca(D::from(rep_ij), rho_st);
-                
+
                 a += psi * (b2pert_ij - b21u_ij) * density;
             }
         }
@@ -144,23 +147,14 @@ impl AttractivePerturbationWCA {
 }
 
 /// Correlation integral for first-order WCA perturbation term Mie fluids
-fn correlation_integral_wca_noldl<D: DualNum<f64> + Copy>(
-    rho: D,    
-    rep: D,
-    att: D,
-    d: D,
-) -> D {    
-    let c = coefficients_wca(rep, att, d);    
+fn correlation_integral_wca_noldl<D: DualNum<f64> + Copy>(rho: D, rep: D, att: D, d: D) -> D {
+    let c = coefficients_wca(rep, att, d);
     mie_prefactor(rep, att) * (c[0] * rho + c[1] * rho.powi(2) + c[2] * rho.powi(3))
         / (c[3] * rho + c[4] * rho.powi(2) + c[5] * rho.powi(3) + 1.0)
 }
 
 /// Low-density limit of correlation integral for first-order WCA perturbation term Mie fluids
-fn correlation_integral_wca_ldl<D: DualNum<f64> + Copy>(    
-    rep: D,
-    att: D,
-    q: D,
-) -> D {
+fn correlation_integral_wca_ldl<D: DualNum<f64> + Copy>(rep: D, att: D, q: D) -> D {
     let rm = (rep / att).powd((rep - att).recip());
     let mean_field_constant = mean_field_constant(rep, att, rm);
     (q.powi(3) - rm.powi(3)) / 3.0 - mean_field_constant
@@ -178,8 +172,7 @@ pub fn one_fluid_properties<D: DualNum<f64> + Copy>(
     x: &DVector<D>,
     t: D,
 ) -> (D, D, D, D, D, D, D, DMatrix<D>, DMatrix<D>) {
-
-    let d = diameter_wca(p, t);   
+    let d = diameter_wca(p, t);
 
     let n = p.sigma.len();
     let mut epsilon_k_vdw1f = D::zero();
@@ -189,12 +182,11 @@ pub fn one_fluid_properties<D: DualNum<f64> + Copy>(
     let mut d_x_st = D::zero();
     let mut m_mix = D::zero();
     let mut sigma_x = D::zero();
-    let mut prefactor_b2 = DMatrix::zeros(n,n);
-    let mut prefactor_a1u = DMatrix::zeros(n,n);
+    let mut prefactor_b2 = DMatrix::zeros(n, n);
+    let mut prefactor_a1u = DMatrix::zeros(n, n);
 
     for i in 0..n {
-
-        let xi_mi = x[i]*p.m[i];
+        let xi_mi = x[i] * p.m[i];
 
         // mixing rules preserving packing fracion and density of mixture
         m_mix += xi_mi;
@@ -202,25 +194,24 @@ pub fn one_fluid_properties<D: DualNum<f64> + Copy>(
         sigma_x += xi_mi * p.sigma[i].powi(3);
 
         for j in 0..n {
-            
             // Van-der-Waals-one-fluid mixing rules
-            let pref = xi_mi * x[j] * p.m[j] * p.sigma_ij[(i,j)].powi(3);
-            prefactor_b2[(i,j)] = pref;
-            prefactor_a1u[(i,j)] = pref * p.eps_k_ij[(i,j)];
+            let pref = xi_mi * x[j] * p.m[j] * p.sigma_ij[(i, j)].powi(3);
+            prefactor_b2[(i, j)] = pref;
+            prefactor_a1u[(i, j)] = pref * p.eps_k_ij[(i, j)];
             sigma_vdw1f_3 += pref;
-            epsilon_k_vdw1f += prefactor_a1u[(i,j)];
+            epsilon_k_vdw1f += prefactor_a1u[(i, j)];
 
             // ... mixing rule for Mie exponents
-            rep_x += x[i] * x[j] * p.rep_ij[(i,j)];
-            att_x += x[i] * x[j] * p.att_ij[(i,j)];
+            rep_x += x[i] * x[j] * p.rep_ij[(i, j)];
+            att_x += x[i] * x[j] * p.att_ij[(i, j)];
         }
     }
 
-    prefactor_a1u = prefactor_a1u * D::from(2.0*PI);
+    prefactor_a1u = prefactor_a1u * D::from(2.0 * PI);
     epsilon_k_vdw1f = epsilon_k_vdw1f / sigma_vdw1f_3;
     sigma_vdw1f_3 = sigma_vdw1f_3 / m_mix.powi(2);
-    sigma_x = (sigma_x/m_mix).powf(1.0/3.0);
-    d_x_st = (d_x_st/m_mix).powf(1.0/3.0)  / sigma_x; // dimensionless
+    sigma_x = (sigma_x / m_mix).powf(1.0 / 3.0);
+    d_x_st = (d_x_st / m_mix).powf(1.0 / 3.0) / sigma_x; // dimensionless
 
     (
         rep_x,
@@ -231,7 +222,7 @@ pub fn one_fluid_properties<D: DualNum<f64> + Copy>(
         d_x_st,
         m_mix,
         prefactor_b2,
-        prefactor_a1u
+        prefactor_a1u,
     )
 }
 
@@ -269,7 +260,7 @@ fn coefficients_wca<D: DualNum<f64> + Copy>(rep: D, att: D, d: D) -> [D; 6] {
 }
 
 fn delta_b2<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64, q: D) -> D {
-    // calculates dB2 / m^2 / sigma^3 
+    // calculates dB2 / m^2 / sigma^3
     let rm = (rep / att).powf(1.0 / (rep - att)); // Check mixing rule!!
     let rc = 5.0;
     let alpha = mean_field_constant(rep, att, rc);
@@ -303,17 +294,16 @@ fn y_eff<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64) -> 
     beta_eff.exp() - 1.0
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{test_parameters_mixture, test_parameters};
+    use crate::uvtheory::parameters::utils::test_parameters_mixture;
     use approx::assert_relative_eq;
     use nalgebra::dvector;
-    
+
     #[test]
     fn test_attractive_perturbation_wca_mixture_different_sigma_epsilon() {
-        let molefracs = dvector![0.4,0.6]; //dvector![1.0];
+        let molefracs = dvector![0.4, 0.6]; //dvector![1.0];
 
         let reduced_temperature = 1.5; //4.0; //1.5;
         let reduced_density = 0.1; //1.0; //0.1;
@@ -336,18 +326,18 @@ mod test {
         //     1.0,
         //     crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,
         // );
-        
+
         let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);
         let a = AttractivePerturbationWCA.helmholtz_energy_density(&p, &state) / reduced_density;
-        dbg!(&a);   
-        
-        // Full attractive contribution        
-        assert_relative_eq!(a, -1.3318651959253898, epsilon = 1e-5);       
+        dbg!(&a);
+
+        // Full attractive contribution
+        assert_relative_eq!(a, -1.3318651959253898, epsilon = 1e-5);
     }
 
-#[test]
+    #[test]
     fn test_attractive_perturbation_wca_mixture_different_sigma_epsilon_m() {
-        let molefracs = dvector![0.4,0.6]; //dvector![1.0];
+        let molefracs = dvector![0.4, 0.6]; //dvector![1.0];
 
         let reduced_temperature = 1.5; //4.0; //1.5;
         let reduced_density = 0.1; //1.0; //0.1;
@@ -370,12 +360,12 @@ mod test {
         //     1.0,
         //     crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,
         // );
-        
+
         let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);
         let a = AttractivePerturbationWCA.helmholtz_energy_density(&p, &state) / reduced_density;
-        dbg!(&a);   
-        
-        // Full attractive contribution        
-        assert_relative_eq!(a, -1.7824366683042956, epsilon = 1e-9);       
-    }    
+        dbg!(&a);
+
+        // Full attractive contribution
+        assert_relative_eq!(a, -1.7824366683042956, epsilon = 1e-9);
+    }
 }

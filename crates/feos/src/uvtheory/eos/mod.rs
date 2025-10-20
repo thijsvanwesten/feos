@@ -116,7 +116,11 @@ impl ResidualDyn for UVTheory {
                 WeeksChandlerAndersenB3.residual_helmholtz_energy_contributions(&self.params, state)
             }
             Perturbation::WeeksChandlerAndersenTPT => WeeksChandlerAndersenTPT
-                .residual_helmholtz_energy_contributions(&self.params, state),
+                .residual_helmholtz_energy_contributions(
+                    &self.params,
+                    state,
+                    self.options.chain_contribution.clone(),
+                ),
         }
     }
 }
@@ -131,9 +135,7 @@ impl Molarweight for UVTheory {
 #[expect(clippy::excessive_precision)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{
-        new_simple, test_parameters, test_parameters_mixture,
-    };
+    use crate::uvtheory::parameters::utils::{new_simple, test_parameters_mixture};
     use crate::uvtheory::parameters::*;
     use approx::assert_relative_eq;
     use feos_core::parameter::{Identifier, PureRecord};

@@ -1,6 +1,5 @@
 use crate::uvtheory::parameters::UVTheoryPars;
 use feos_core::StateHD;
-use nalgebra::DMatrix;
 use nalgebra::DVector;
 use num_dual::DualNum;
 use std::f64::consts::FRAC_PI_6;
@@ -49,6 +48,7 @@ pub(super) const WCA_CONSTANTS_ETA_B_UVB3: [[f64; 2]; 3] = [
     [-13.47050687, 56.65701375],
     [12.90119266, -42.71680606],
 ];
+
 #[derive(Debug, Clone)]
 pub struct HardSphereWCA;
 
@@ -206,16 +206,15 @@ pub(super) fn packing_fraction_b_ij<D: DualNum<f64> + Copy>(
 pub(super) fn packing_fraction_a_ij<D: DualNum<f64> + Copy>(
     dhs_st: D,
     rs_st: f64,
-    rep: f64,    
+    rep: f64,
     eta: D,
 ) -> (D, D) {
-    
     let tau = -dhs_st + rs_st;
     let tau2 = tau * tau;
     let rep_inv = 1.0 / rep;
 
     let c = [
-        tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv) 
+        tau * (WCA_CONSTANTS_ETA_A[0][0] + WCA_CONSTANTS_ETA_A[0][1] * rep_inv)
             + tau2 * (WCA_CONSTANTS_ETA_A[0][2] + WCA_CONSTANTS_ETA_A[0][3] * rep_inv),
         tau * (WCA_CONSTANTS_ETA_A[1][0] + WCA_CONSTANTS_ETA_A[1][1] * rep_inv)
             + tau2 * (WCA_CONSTANTS_ETA_A[1][2] + WCA_CONSTANTS_ETA_A[1][3] * rep_inv),
@@ -345,12 +344,8 @@ pub(super) fn packing_fraction_a_ij<D: DualNum<f64> + Copy>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::{
-        UVTheoryParameters, UVTheoryRecord,
-        utils::{new_simple, test_parameters, test_parameters_mixture},
-    };
+    use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
     use approx::assert_relative_eq;
-    use feos_core::parameter::{Identifier, PureRecord};
     use nalgebra::dvector;
 
     #[test]

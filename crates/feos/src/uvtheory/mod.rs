@@ -56,9 +56,9 @@
 mod eos;
 mod parameters;
 
-pub use eos::{
-    BarkerHenderson, Perturbation, UVTheory, UVTheoryOptions, WeeksChandlerAndersen,
-    WeeksChandlerAndersenB3, WeeksChandlerAndersenTPT,
-};
 pub use eos::wca_tpt;
+pub use eos::{
+    BarkerHenderson, ChainContribution, CombinationRule, Perturbation, UVTheory, UVTheoryOptions,
+    WeeksChandlerAndersen, WeeksChandlerAndersenB3, WeeksChandlerAndersenTPT,
+};
 pub use parameters::{UVTheoryParameters, UVTheoryRecord};

@@ -1,12 +1,14 @@
-use super::hard_sphere_wca::{diameter_wca, dimensionless_diameter_q_wca, packing_fraction};
-use super::hard_sphere_wca::{diameter_wca_i, packing_fraction_a_ij, packing_fraction_b_ij, zeta};
+use super::hard_sphere_wca::{
+    diameter_wca, dimensionless_diameter_q_wca, packing_fraction, packing_fraction_a_ij,
+    packing_fraction_b_ij, zeta,
+};
 use crate::uvtheory::eos::ChainContribution;
 use crate::uvtheory::parameters::*;
 use feos_core::StateHD;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
 use std::fmt;
-use std::{f64::consts::FRAC_PI_6, f64::consts::PI, sync::Arc};
+use std::{f64::consts::FRAC_PI_6, f64::consts::PI};
 
 const PAR: [f64; 19] = [
     0.225625,
@@ -56,9 +58,9 @@ impl ChainMie {
         let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let zms = (-eta + 1.0).recip();
         let zms2 = zms * zms;
-        
+
         // let z2t = (x * m * d.mapv(|di| di.powi(2))).sum() * FRAC_PI_6;
-        let z2t = (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * d[i].powi(2)) * FRAC_PI_6;        
+        let z2t = (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * d[i].powi(2)) * FRAC_PI_6;
         let z2 = density * z2t;
         let rho_st = density * (0..n).fold(D::zero(), |z, i| z + x[i] * m[i] * p.sigma[i].powi(3));
 
@@ -190,13 +192,20 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     let t_st = temperature / p.eps_k_ij[(i, j)];
     let d_hs = (dhs[i] + dhs[j]) * 0.5;
 
-    let yhs_r = y_hf(&partial_density, &mseg, &dhs, i, j, d_hs.recip() * r_st * sigma);
+    let yhs_r = y_hf(
+        &partial_density,
+        &mseg,
+        &dhs,
+        i,
+        j,
+        d_hs.recip() * r_st * sigma,
+    );
     let yhs_d = y_hf(&partial_density, &mseg, &dhs, i, j, D::one());
-    
+
     let d_st = d_hs / sigma;
     let d_st_3 = d_st.powi(3);
     let q_st_3 = dimensionless_diameter_q_wca(t_st, D::one() * rep, D::one() * att).powi(3);
-    let rm_st = (rep / att).powf((rep - att).recip() );
+    let rm_st = (rep / att).powf((rep - att).recip());
     let rm_st_3 = rm_st.powi(3);
 
     // Effective packing fractions (+derivatives) for first-order Mayer-f perturbation term in Helmholz energy da01
@@ -232,12 +241,7 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
 
 // Effective packing fraction specific to CCF of WCA fluid around contact
 // pub(super)
-fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(
-    dhs_st: D,
-    rmin_st: f64,
-    rep: f64,    
-    eta: D,
-) -> D {
+fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(dhs_st: D, rmin_st: f64, rep: f64, eta: D) -> D {
     let tau = -dhs_st + rmin_st;
     let rep_inv = 1.0 / rep;
     let rep_inv2 = rep_inv * rep_inv;
@@ -313,8 +317,7 @@ fn y_hf<D: DualNum<f64> + Copy>(
     //         y1[(i, j)] = zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2);
     //     }
     // }
-    
-    
+
     let y1 = DMatrix::from_fn(n, n, |i, j| {
         let dij = d[i] * d[j] * (d[i] + d[j]).recip();
         zms + zms2 * 3.0 * z2 * dij + zms3 * 2.0 * (z2 * dij).powi(2)
@@ -452,7 +455,6 @@ mod test {
     use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
-    use num_dual::{Dual2_64, Dual3_64, Dual64, HyperDual64};
 
     /*
     #[test]
