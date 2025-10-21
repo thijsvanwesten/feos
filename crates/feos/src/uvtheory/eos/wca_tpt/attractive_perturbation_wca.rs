@@ -137,6 +137,7 @@ impl AttractivePerturbationWCA {
 
                 // Interpolation term
                 let b2pert_ij = prefactor_b2[(i, j)] * delta_b2(t_ij, rep_ij, att_ij, q_ij);
+ 
                 let psi = D::one() - u_fraction_wca(D::from(rep_ij), rho_st);
 
                 a += psi * (b2pert_ij - b21u_ij) * density;
@@ -145,6 +146,7 @@ impl AttractivePerturbationWCA {
         a * density
     }
 }
+
 
 /// Correlation integral for first-order WCA perturbation term Mie fluids
 fn correlation_integral_wca_noldl<D: DualNum<f64> + Copy>(rho: D, rep: D, att: D, d: D) -> D {
@@ -160,7 +162,7 @@ fn correlation_integral_wca_ldl<D: DualNum<f64> + Copy>(rep: D, att: D, q: D) ->
     (q.powi(3) - rm.powi(3)) / 3.0 - mean_field_constant
 }
 
-/// U-fraction for WCA division
+/// u-fraction
 fn u_fraction_wca<D: DualNum<f64> + Copy>(rep_x: D, reduced_density: D) -> D {
     (reduced_density * CU_WCA[0]
         + reduced_density.powi(2) * (rep_x.recip() * CU_WCA[2] + CU_WCA[1]))

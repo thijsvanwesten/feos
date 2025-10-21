@@ -111,12 +111,6 @@ impl ChainMie {
             // Helmholtz energy
             a -= x[i] * (m[i] - 1.0) * y_sigma.ln();
 
-            // dbg!(rho_st);
-            // dbg!(phiu);
-            // dbg!(y_wca_sigma);
-            // dbg!(y_sigma);
-            // dbg!(a);
-
             //-----------------
             // TPT1-y (homo-segmented)
             //-----------------
