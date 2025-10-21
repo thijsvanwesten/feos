@@ -36,8 +36,8 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation="WCA", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10),
-        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10)"#
+        signature = (parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10),
+        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10)"#
     )]
     fn uvtheory(
         parameters: PyParameters,
