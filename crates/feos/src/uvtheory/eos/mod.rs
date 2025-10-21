@@ -97,8 +97,11 @@ impl ResidualDyn for UVTheory {
     }
 
     fn compute_max_density<D: DualNum<f64> + Copy>(&self, molefracs: &DVector<D>) -> D {
-        let sigma3 = self.params.sigma.map(|v| v.powi(3));
-        (sigma3.map(D::from).dot(molefracs) * FRAC_PI_6).recip() * self.options.max_eta
+        let msigma3 = self
+            .params
+            .m
+            .component_mul(&self.params.sigma.map(|v| v.powi(3)));
+        (msigma3.map(D::from).dot(molefracs) * FRAC_PI_6).recip() * self.options.max_eta
     }
 
     fn reduced_helmholtz_energy_density_contributions<D: DualNum<f64> + Copy>(
