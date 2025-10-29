@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 /// uv-theory parameters for a pure substance
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct UVTheoryRecord {
-    m: f64,
-    rep: f64,
-    att: f64,
-    sigma: f64,
-    epsilon_k: f64,
+    pub m: f64,
+    pub rep: f64,
+    pub att: f64,
+    pub sigma: f64,
+    pub epsilon_k: f64,
 }
 
 impl UVTheoryRecord {
@@ -24,6 +24,26 @@ impl UVTheoryRecord {
             att,
             sigma,
             epsilon_k,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+pub struct UVTheoryAssociationRecord {
+    /// Association radius parameter
+    pub rc_ab: f64,
+    /// Association site location relative to center
+    pub rd_ab: f64,
+    /// Association energy parameter in units of Kelvin
+    pub epsilon_k_ab: f64,
+}
+
+impl UVTheoryAssociationRecord {
+    pub fn new(rc_ab: f64, rd_ab: f64, epsilon_k_ab: f64) -> Self {
+        Self {
+            rc_ab,
+            rd_ab,
+            epsilon_k_ab,
         }
     }
 }
@@ -46,7 +66,7 @@ pub fn mean_field_constant<D: DualNum<f64> + Copy>(rep: D, att: D, x: D) -> D {
 }
 
 /// Parameters for all substances for uv-theory equation of state and Helmholtz energy functional
-pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, ()>;
+pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, UVTheoryAssociationRecord>;
 
 /// Parameters for all substances for uv-theory equation of state and Helmholtz energy functional
 #[derive(Debug, Clone)]
@@ -153,7 +173,13 @@ pub mod utils {
     use feos_core::parameter::{Identifier, PureRecord};
     use std::f64;
 
-    pub fn new_simple(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> UVTheoryParameters {
+    pub fn new_simple(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+    ) -> UVTheoryParameters {
         UVTheoryParameters::new_pure(PureRecord::new(
             Default::default(),
             0.0,

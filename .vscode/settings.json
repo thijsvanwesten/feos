@@ -1,5 +1,3 @@
 {
-    "rust-analyzer.cargo.features": [
-        "uvtheory"
-    ]
+    "rust-analyzer.cargo.features": ["uvtheory"]
 }

@@ -1,16 +1,28 @@
+use crate::{
+    association::{Association, AssociationStrength},
+    hard_sphere::HardSphereProperties,
+    uvtheory::{
+        UVTheoryRecord,
+        parameters::UVTheoryAssociationRecord,
+        wca_tpt::{
+            attractive_perturbation_wca::AttractivePerturbationWCA, chain_mie_tpty::ChainMie,
+            hard_sphere_wca::HardSphereWCA, reference_perturbation_wca::ReferencePerturbationWCA,
+        },
+    },
+};
+
 use super::parameters::{UVTheoryParameters, UVTheoryPars};
-use feos_core::{Molarweight, ResidualDyn, Subset};
+use feos_core::{Molarweight, ResidualDyn, StateHD, Subset};
 use nalgebra::DVector;
 use num_dual::DualNum;
 use quantity::MolarWeight;
-use std::f64::consts::FRAC_PI_6;
+use std::f64::consts::{FRAC_PI_6, PI};
 
 mod bh;
 pub use bh::BarkerHenderson;
 mod wca;
 pub use wca::{WeeksChandlerAndersen, WeeksChandlerAndersenB3};
 pub mod wca_tpt;
-pub use wca_tpt::WeeksChandlerAndersenTPT;
 
 /// Type of Combination Rule.
 #[derive(Debug, Clone)]
@@ -65,6 +77,7 @@ pub struct UVTheory {
     parameters: UVTheoryParameters,
     params: UVTheoryPars,
     options: UVTheoryOptions,
+    association: Option<Association<UVTheoryPars>>,
 }
 
 impl UVTheory {
@@ -77,11 +90,59 @@ impl UVTheory {
     pub fn with_options(parameters: UVTheoryParameters, options: UVTheoryOptions) -> Self {
         let params = UVTheoryPars::new(&parameters, options.perturbation);
 
+        let association = Association::new(
+            &parameters,
+            options.max_iter_cross_assoc,
+            options.tol_cross_assoc,
+        )
+        .unwrap();
+
         Self {
             parameters,
             params,
             options,
+            association,
         }
+    }
+
+    pub fn reduced_helmholtz_energy_density_contributions_wca_tpt<D: DualNum<f64> + Copy>(
+        &self,
+        state: &StateHD<D>,
+    ) -> Vec<(&'static str, D)> {
+        let mut contributions = vec![
+            (
+                "Hard Sphere (WCA, TPT)",
+                HardSphereWCA.helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Mie Chain",
+                ChainMie {
+                    chain_contribution: self.options.chain_contribution.clone(),
+                }
+                .helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Reference Perturbation (WCA)",
+                ReferencePerturbationWCA.helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Attractive Perturbation (WCA)",
+                AttractivePerturbationWCA.helmholtz_energy_density(&self.params, state),
+            ),
+        ];
+        if let Some(association) = self.association.as_ref() {
+            let d = self.params.hs_diameter(state.temperature);
+            contributions.push((
+                "Association",
+                association.helmholtz_energy_density(
+                    &self.params,
+                    &self.parameters.association,
+                    state,
+                    &d,
+                ),
+            ))
+        }
+        contributions
     }
 }
 
@@ -118,12 +179,68 @@ impl ResidualDyn for UVTheory {
             Perturbation::WeeksChandlerAndersenB3 => {
                 WeeksChandlerAndersenB3.residual_helmholtz_energy_contributions(&self.params, state)
             }
-            Perturbation::WeeksChandlerAndersenTPT => WeeksChandlerAndersenTPT
-                .residual_helmholtz_energy_contributions(
-                    &self.params,
-                    state,
-                    self.options.chain_contribution.clone(),
-                ),
+            Perturbation::WeeksChandlerAndersenTPT => {
+                self.reduced_helmholtz_energy_density_contributions_wca_tpt(state)
+            }
+        }
+    }
+}
+
+impl AssociationStrength for UVTheoryPars {
+    type Pure = UVTheoryRecord;
+    type Record = UVTheoryAssociationRecord;
+
+    fn association_strength<D: DualNum<f64> + Copy>(
+        &self,
+        state: &feos_core::StateHD<D>,
+        diameter: &DVector<D>,
+        comp_i: usize,
+        comp_j: usize,
+        assoc_ij: &Self::Record,
+    ) -> D {
+        let [zeta2, n3] = self.zeta(state.temperature, &state.partial_density, [2, 3]);
+        let n2 = zeta2 * 6.0;
+        let n3i = (-n3 + 1.0).recip();
+        let di = diameter[comp_i];
+        let dj = diameter[comp_j];
+        let k = di * dj / (di + dj) * (n2 * n3i);
+        let g_contact = n3i * (k * (k / 18.0 + 0.5) + 1.0);
+
+        let d = (di + dj) * 0.5;
+
+        // temperature dependent association volume
+        // rc and rd are dimensioned in units of Angstrom
+        let rc = assoc_ij.rc_ab;
+        let rd = assoc_ij.rd_ab;
+
+        let k_ab_ij = d * d * PI * 4.0 / (72.0 * rd.powi(2))
+            * ((d.recip() * (rc + 2.0 * rd)).ln()
+                * (6.0 * rc.powi(3) + 18.0 * rc.powi(2) * rd - 24.0 * rd.powi(3))
+                + (-d + rc + 2.0 * rd)
+                    * (d.powi(2) + d * rc + 22.0 * rd.powi(2)
+                        - 5.0 * rc * rd
+                        - d * 7.0 * rd
+                        - 8.0 * rc.powi(2)));
+        let i_ab_ij = g_contact * k_ab_ij;
+        i_ab_ij * (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1()
+    }
+
+    fn combining_rule(
+        pure_i: &Self::Pure,
+        pure_j: &Self::Pure,
+        parameters_i: &Self::Record,
+        parameters_j: &Self::Record,
+    ) -> Self::Record {
+        let rc_ab = (parameters_i.rc_ab * pure_i.sigma + parameters_j.rc_ab * pure_j.sigma) * 0.5;
+        let rd_ab = (parameters_i.rd_ab * pure_i.sigma + parameters_j.rd_ab * pure_j.sigma) * 0.5;
+        // geometric (SAFT-VR Mie)
+        let epsilon_k_ab = (parameters_i.epsilon_k_ab * parameters_j.epsilon_k_ab).sqrt();
+        // arithmetic (PC-SAFT)
+        // let epsilon_k_ab = 0.5 * (parameters_i.epsilon_k_ab + parameters_j.epsilon_k_ab);
+        Self::Record {
+            rc_ab,
+            rd_ab,
+            epsilon_k_ab,
         }
     }
 }

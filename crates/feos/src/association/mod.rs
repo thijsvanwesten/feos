@@ -19,9 +19,18 @@ pub trait AssociationStrength: HardSphereProperties {
     type Pure;
     type Record: Clone + Debug + PartialEq + 'static;
 
+    // fn association_strength<D: DualNum<f64> + Copy>(
+    //     &self,
+    //     temperature: D,
+    //     comp_i: usize,
+    //     comp_j: usize,
+    //     assoc_ij: &Self::Record,
+    // ) -> D;
+
     fn association_strength<D: DualNum<f64> + Copy>(
         &self,
-        temperature: D,
+        state: &StateHD<D>,
+        diameter: &DVector<D>,
         comp_i: usize,
         comp_j: usize,
         assoc_ij: &Self::Record,
@@ -133,21 +142,8 @@ impl<A: AssociationStrength> Association<A> {
     ) -> D {
         let a = parameters;
 
-        // auxiliary variables
-        let [zeta2, n3] = model.zeta(state.temperature, &state.partial_density, [2, 3]);
-        let n2 = zeta2 * 6.0;
-        let n3i = (-n3 + 1.0).recip();
-
         // association strength
-        let [delta_ab, delta_cc] = self.association_strength(
-            parameters,
-            model,
-            state.temperature,
-            diameter,
-            n2,
-            n3i,
-            D::one(),
-        );
+        let [delta_ab, delta_cc] = self.association_strength(parameters, model, state, diameter);
 
         match (
             a.sites_a.len() * a.sites_b.len(),
@@ -184,48 +180,86 @@ impl<A: AssociationStrength> Association<A> {
         &self,
         parameters: &AssociationParameters<A::Record>,
         model: &A,
-        temperature: D,
+        state: &StateHD<D>,
         diameter: &DVector<D>,
-        n2: D,
-        n3i: D,
-        xi: D,
     ) -> [DMatrix<D>; 2] {
         let p = parameters;
 
         let delta_ab = DMatrix::from_fn(p.sites_a.len(), p.sites_b.len(), |i, j| {
             if let Some(par) = &self.parameters_ab[(i, j)] {
-                let di = diameter[p.sites_a[i].assoc_comp];
-                let dj = diameter[p.sites_b[j].assoc_comp];
-                let k = di * dj / (di + dj) * (n2 * n3i);
-                n3i * (k * xi * (k / 18.0 + 0.5) + 1.0)
-                    * model.association_strength(
-                        temperature,
-                        p.sites_a[i].assoc_comp,
-                        p.sites_b[j].assoc_comp,
-                        par,
-                    )
+                model.association_strength(
+                    state,
+                    diameter,
+                    p.sites_a[i].assoc_comp,
+                    p.sites_b[j].assoc_comp,
+                    par,
+                )
             } else {
                 D::zero()
             }
         });
         let delta_cc = DMatrix::from_fn(p.sites_c.len(), p.sites_c.len(), |i, j| {
             if let Some(par) = &self.parameters_cc[(i, j)] {
-                let di = diameter[p.sites_c[i].assoc_comp];
-                let dj = diameter[p.sites_c[j].assoc_comp];
-                let k = di * dj / (di + dj) * (n2 * n3i);
-                n3i * (k * xi * (k / 18.0 + 0.5) + 1.0)
-                    * model.association_strength(
-                        temperature,
-                        p.sites_c[i].assoc_comp,
-                        p.sites_c[j].assoc_comp,
-                        par,
-                    )
+                model.association_strength(
+                    state,
+                    diameter,
+                    p.sites_c[i].assoc_comp,
+                    p.sites_c[j].assoc_comp,
+                    par,
+                )
             } else {
                 D::zero()
             }
         });
         [delta_ab, delta_cc]
     }
+    // #[expect(clippy::too_many_arguments)]
+    // fn association_strength<D: DualNum<f64> + Copy>(
+    //     &self,
+    //     parameters: &AssociationParameters<A::Record>,
+    //     model: &A,
+    //     temperature: D,
+    //     diameter: &DVector<D>,
+    //     n2: D,
+    //     n3i: D,
+    //     xi: D,
+    // ) -> [DMatrix<D>; 2] {
+    //     let p = parameters;
+
+    //     let delta_ab = DMatrix::from_fn(p.sites_a.len(), p.sites_b.len(), |i, j| {
+    //         if let Some(par) = &self.parameters_ab[(i, j)] {
+    //             let di = diameter[p.sites_a[i].assoc_comp];
+    //             let dj = diameter[p.sites_b[j].assoc_comp];
+    //             let k = di * dj / (di + dj) * (n2 * n3i);
+    //             n3i * (k * xi * (k / 18.0 + 0.5) + 1.0)
+    //                 * model.association_strength(
+    //                     temperature,
+    //                     p.sites_a[i].assoc_comp,
+    //                     p.sites_b[j].assoc_comp,
+    //                     par,
+    //                 )
+    //         } else {
+    //             D::zero()
+    //         }
+    //     });
+    //     let delta_cc = DMatrix::from_fn(p.sites_c.len(), p.sites_c.len(), |i, j| {
+    //         if let Some(par) = &self.parameters_cc[(i, j)] {
+    //             let di = diameter[p.sites_c[i].assoc_comp];
+    //             let dj = diameter[p.sites_c[j].assoc_comp];
+    //             let k = di * dj / (di + dj) * (n2 * n3i);
+    //             n3i * (k * xi * (k / 18.0 + 0.5) + 1.0)
+    //                 * model.association_strength(
+    //                     temperature,
+    //                     p.sites_c[i].assoc_comp,
+    //                     p.sites_c[j].assoc_comp,
+    //                     par,
+    //                 )
+    //         } else {
+    //             D::zero()
+    //         }
+    //     });
+    //     [delta_ab, delta_cc]
+    // }
 
     fn helmholtz_energy_density_ab_analytic<D: DualNum<f64> + Copy>(
         &self,
