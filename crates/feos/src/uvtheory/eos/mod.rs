@@ -222,9 +222,9 @@ impl AssociationStrength for UVTheoryPars {
                         - d * 7.0 * rd
                         - 8.0 * rc.powi(2)));
         let i_ab_ij = g_contact * k_ab_ij;
-        let a = i_ab_ij * (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
-        dbg!(rc, rd, g_contact, k_ab_ij, i_ab_ij, a);
-        a
+        let delta = i_ab_ij * (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
+        dbg!(rc, rd, g_contact, k_ab_ij, i_ab_ij, delta);
+        delta
     }
 
     fn combining_rule(
