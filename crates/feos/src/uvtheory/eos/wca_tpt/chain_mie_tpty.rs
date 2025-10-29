@@ -10,6 +10,7 @@ use num_dual::DualNum;
 use std::fmt;
 use std::{f64::consts::FRAC_PI_6, f64::consts::PI};
 
+// Constants for CCF of Mie fluid around contact
 const PAR: [f64; 19] = [
     0.225625,
     4.796965,

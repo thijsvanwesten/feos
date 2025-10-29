@@ -5,6 +5,8 @@ use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
 use std::{f64::consts::PI, fmt};
 
+
+// Coefficients for IWCA from eq. (S55)
 const C_WCA: [[f64; 6]; 6] = [
     [
         -0.2622378162,
