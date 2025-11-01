@@ -130,7 +130,7 @@ pub(super) fn zeta<D: DualNum<f64> + Copy>(
     zeta
 }
 
-pub(super) fn packing_fraction<D: DualNum<f64> + Copy>(
+pub fn packing_fraction<D: DualNum<f64> + Copy>(
     m: &DVector<f64>,
     partial_density: &DVector<D>,
     diameter: &DVector<D>,

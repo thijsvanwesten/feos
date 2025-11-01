@@ -78,36 +78,46 @@ impl ChainMie {
             // TPT1
             //-----------------
 
-            // CCF WCA fluid (MF1 theory)
-            let y_wca_sigma = y_wca_aroundcontact_mix(
-                1.0,
-                &p,
-                eta,
-                &state.partial_density,
-                state.temperature,
-                &d,
-                i,
-                i,
-            );
+            // // CCF WCA fluid (MF1 theory)
+            // let y_wca_sigma = y_wca_aroundcontact_mix(
+            //     1.0,
+            //     &p,
+            //     eta,
+            //     &state.partial_density,
+            //     state.temperature,
+            //     &d,
+            //     i,
+            //     i,
+            // );
 
             // CCF Mie fluid (uf-theory)
+            let y_sigma = gmie_aroundcontact_mix(
+                1.0, 
+                &p, 
+                eta, 
+                &state.partial_density, 
+                state.temperature, 
+                &d, 
+                &rho_st, 
+                i, 
+                i);
+
             let t_st = state.temperature / p.epsilon_k[i];
             let nu_inv = (p.rep[i]).recip();
-            let nu_inv2 = nu_inv * nu_inv;
 
-            // move PAR to constant, see top of file
-            let c1 = D::one() * (PAR[0] + PAR[1] * nu_inv + PAR[2] * nu_inv2)
-                + t_st.recip() * (PAR[3] + PAR[4] * nu_inv + PAR[5] * nu_inv2);
-            let c2 = D::one() * (PAR[6] + PAR[7] * nu_inv + PAR[8] * nu_inv2)
-                + t_st.recip() * (PAR[9] + PAR[10] * nu_inv + PAR[11] * nu_inv2);
-            let aa = (PAR[14] + PAR[15] * nu_inv).abs();
-            let bb = PAR[16] * nu_inv + PAR[17] * nu_inv2 + PAR[18] * nu_inv.powi(3);
-            let c3 = (D::one() + t_st).ln() * bb + aa;
+            // // move PAR to constant, see top of file
+            // let c1 = D::one() * (PAR[0] + PAR[1] * nu_inv + PAR[2] * nu_inv2)
+            //     + t_st.recip() * (PAR[3] + PAR[4] * nu_inv + PAR[5] * nu_inv2);
+            // let c2 = D::one() * (PAR[6] + PAR[7] * nu_inv + PAR[8] * nu_inv2)
+            //     + t_st.recip() * (PAR[9] + PAR[10] * nu_inv + PAR[11] * nu_inv2);
+            // let aa = (PAR[14] + PAR[15] * nu_inv).abs();
+            // let bb = PAR[16] * nu_inv + PAR[17] * nu_inv2 + PAR[18] * nu_inv.powi(3);
+            // let c3 = (D::one() + t_st).ln() * bb + aa;
 
-            let prefactor = D::one() + (-c3 * rho_st).exp() * (PAR[12] + PAR[13] * nu_inv);
-            let phiu = prefactor * (c1 * rho_st + c2 * rho_st * rho_st).tanh();
+            // let prefactor = D::one() + (-c3 * rho_st).exp() * (PAR[12] + PAR[13] * nu_inv);
+            // let phiu = prefactor * (c1 * rho_st + c2 * rho_st * rho_st).tanh();
 
-            let y_sigma = y_wca_sigma * (D::one() + phiu * ((-t_st.recip()).exp() - 1.0));
+            // let y_sigma = y_wca_sigma * (D::one() + phiu * ((-t_st.recip()).exp() - 1.0));
 
             // Helmholtz energy
             a -= x[i] * (m[i] - 1.0) * y_sigma.ln();
@@ -166,6 +176,51 @@ impl ChainMie {
         }
         density * a
     }
+}
+
+
+pub fn gmie_aroundcontact_mix<D: DualNum<f64> + Copy>(
+    r_st: f64,
+    p: &UVTheoryPars,
+    eta: D,
+    partial_density: &DVector<D>,
+    temperature: D,
+    dhs: &DVector<D>,
+    rho_st: &D,
+    i: usize,
+    j: usize,
+) -> D {
+
+    // CCF WCA fluid (MF1 theory)
+    let y_wca_sigma = y_wca_aroundcontact_mix(
+        r_st,
+        p,
+        eta,
+        partial_density,
+        temperature,
+        dhs,
+        i,
+        j,
+    );       
+    
+    // CCF Mie fluid (uf-theory)
+    let t_st = temperature / p.eps_k_ij[(i, j)];
+    let nu_inv = 1.0/p.rep_ij[(i,j)];
+    let nu_inv2 = nu_inv * nu_inv;
+
+    // move PAR to constant, see top of file
+    let c1 = D::one() * (PAR[0] + PAR[1] * nu_inv + PAR[2] * nu_inv2)
+        + t_st.recip() * (PAR[3] + PAR[4] * nu_inv + PAR[5] * nu_inv2);
+    let c2 = D::one() * (PAR[6] + PAR[7] * nu_inv + PAR[8] * nu_inv2)
+        + t_st.recip() * (PAR[9] + PAR[10] * nu_inv + PAR[11] * nu_inv2);
+    let aa = (PAR[14] + PAR[15] * nu_inv).abs();
+    let bb = PAR[16] * nu_inv + PAR[17] * nu_inv2 + PAR[18] * nu_inv.powi(3);
+    let c3 = (D::one() + t_st).ln() * bb + aa;
+
+    let prefactor = D::one() + (-c3 * rho_st).exp() * (PAR[12] + PAR[13] * nu_inv);
+    let phiu = prefactor * (c1 * rho_st + c2 * rho_st * rho_st).tanh();
+
+    y_wca_sigma * (D::one() + phiu * ((-t_st.recip()).exp() - 1.0))
 }
 
 // CCF of two WCA monomers of index i and j in a WCA fluid mixture at reduced distance r/sigma.
