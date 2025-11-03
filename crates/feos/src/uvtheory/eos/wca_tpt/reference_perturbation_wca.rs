@@ -71,7 +71,7 @@ impl ReferencePerturbationWCA {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
+    use crate::uvtheory::{eos::AssociationModel, parameters::utils::{test_parameters, test_parameters_mixture}};
     use approx::assert_relative_eq;
     // use ndarray::arr1;
     use nalgebra::dvector;
@@ -109,7 +109,7 @@ mod test {
             dvector![1.0, 1.0],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT, AssociationModel::TVW);
 
         let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);
         let a = ReferencePerturbationWCA.helmholtz_energy_density(&p, &state) / reduced_density;
@@ -130,7 +130,7 @@ mod test {
             dvector![1.0, 0.8],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT, AssociationModel::TVW);
 
         let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);
         let a = ReferencePerturbationWCA.helmholtz_energy_density(&p, &state) / reduced_density;

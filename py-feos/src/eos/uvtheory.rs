@@ -2,7 +2,9 @@ use super::PyEquationOfState;
 use crate::ideal_gas::IdealGasModel;
 use crate::parameter::PyParameters;
 use crate::residual::ResidualModel;
-use feos::uvtheory::{ChainContribution, CombinationRule, Perturbation, UVTheory, UVTheoryOptions};
+use feos::uvtheory::{
+    AssociationModel, ChainContribution, CombinationRule, Perturbation, UVTheory, UVTheoryOptions,
+};
 use feos_core::{EquationOfState, ResidualDyn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -24,6 +26,8 @@ impl PyEquationOfState {
     ///     Rule used to combine parameters. Defaults to "geometric_psi".
     /// chain_contribution : "tpt1" | "tpt1y", optional
     ///     TPT version. Defaults to "tpt1y".
+    /// association_model : "tvw" | "lafitte", optional
+    ///     Association model to use. Defaults to "tvw".
     /// max_iter_cross_assoc : unsigned integer, optional
     ///     Maximum number of iterations for cross association. Defaults to 50.
     /// tol_cross_assoc : float, optional
@@ -36,8 +40,8 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10),
-        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", max_iter_cross_assoc=50, tol_cross_assoc=1e-10)"#
+        signature = (parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", association_model="tvw", max_iter_cross_assoc=50, tol_cross_assoc=1e-10),
+        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA_TPT", combination_rule="geometric_psi", chain_contribution="tpt1y", association_model="tvw", max_iter_cross_assoc=50, tol_cross_assoc=1e-10)"#
     )]
     fn uvtheory(
         parameters: PyParameters,
@@ -45,6 +49,7 @@ impl PyEquationOfState {
         perturbation: &str,
         combination_rule: &str,
         chain_contribution: &str,
+        association_model: &str,
         max_iter_cross_assoc: usize,
         tol_cross_assoc: f64,
     ) -> PyResult<Self> {
@@ -79,11 +84,21 @@ impl PyEquationOfState {
                 ))
             }
         };
+        let association_model = match association_model {
+            "tvw" => AssociationModel::TVW,
+            "lafitte" => AssociationModel::Lafitte,
+            _ => {
+                return Err(PyErr::new::<PyValueError, _>(
+                    r#"association_model must be "tvw" or "lafitte""#.to_string(),
+                ))
+            }
+        };
         let options = UVTheoryOptions {
             max_eta,
             perturbation,
             combination_rule,
             chain_contribution,
+            association_model,
             max_iter_cross_assoc,
             tol_cross_assoc,
         };

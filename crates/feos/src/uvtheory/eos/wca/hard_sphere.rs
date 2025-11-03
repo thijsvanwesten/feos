@@ -244,6 +244,7 @@ mod test {
     use super::*;
     use crate::hard_sphere::HardSphere;
     use crate::uvtheory::Perturbation::WeeksChandlerAndersen as WCA;
+    use crate::uvtheory::eos::AssociationModel;
     use crate::uvtheory::parameters::utils::{
         methane_parameters, test_parameters, test_parameters_mixture,
     };
@@ -260,7 +261,7 @@ mod test {
         );
 
         // Methane
-        let p = UVTheoryPars::new(&methane_parameters(24.0, 6.0), WCA);
+        let p = UVTheoryPars::new(&methane_parameters(24.0, 6.0), WCA, AssociationModel::TVW);
 
         assert_eq!(
             WeeksChandlerAndersen::diameter_wca(&p, 4.0 * p.epsilon_k[0])[0] / p.sigma[0],
@@ -298,8 +299,10 @@ mod test {
                 dvector![6.0, 6.0],
                 dvector![1.0, 1.0],
                 dvector![1.0, 0.5],
+                
             ),
             WCA,
+            AssociationModel::TVW
         );
 
         let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);

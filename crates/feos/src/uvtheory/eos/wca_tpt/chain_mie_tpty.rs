@@ -502,7 +502,7 @@ fn g_mspt<D: DualNum<f64> + Copy>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
+    use crate::uvtheory::{eos::AssociationModel, parameters::utils::{test_parameters, test_parameters_mixture}};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
 
@@ -925,7 +925,7 @@ mod test {
             dvector![1.0, 1.5],
             dvector![1.0, 1.25],
         );
-        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,AssociationModel::TVW);
 
         let chain = ChainMie {
             chain_contribution: ChainContribution::TPT1y,

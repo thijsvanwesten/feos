@@ -376,6 +376,7 @@ fn delta_b3<D: DualNum<f64> + Copy>(
 mod test {
     use super::*;
     use crate::uvtheory::Perturbation::WeeksChandlerAndersenB3 as WCAB3;
+    use crate::uvtheory::eos::AssociationModel;
     use crate::uvtheory::parameters::utils::methane_parameters;
     use approx::assert_relative_eq;
     use nalgebra::dvector;
@@ -385,7 +386,7 @@ mod test {
         let reduced_temperature = 4.0;
         let reduced_density = 0.5;
 
-        let p = UVTheoryPars::new(&methane_parameters(12.0, 6.0), WCAB3);
+        let p = UVTheoryPars::new(&methane_parameters(12.0, 6.0), WCAB3, AssociationModel::TVW);
         let state = StateHD::new(
             reduced_temperature * p.epsilon_k[0],
             p.sigma[0].powi(3) / reduced_density,

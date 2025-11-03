@@ -58,6 +58,7 @@ impl ReferencePerturbation {
 mod test {
     use super::*;
     use crate::uvtheory::Perturbation::WeeksChandlerAndersen as WCA;
+    use crate::uvtheory::eos::AssociationModel;
     use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
@@ -90,6 +91,7 @@ mod test {
                 dvector![1.0, 0.5],
             ),
             WCA,
+            AssociationModel::TVW
         );
 
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &molefracs);

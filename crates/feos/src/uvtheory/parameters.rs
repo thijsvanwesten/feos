@@ -1,5 +1,8 @@
-use super::{BarkerHenderson, Perturbation, WeeksChandlerAndersen};
-use crate::hard_sphere::{HardSphereProperties, MonomerShape};
+use super::{Perturbation, WeeksChandlerAndersen}; // BarkerHenderson
+use crate::{
+    hard_sphere::{HardSphereProperties, MonomerShape},
+    uvtheory::eos::AssociationModel,
+};
 use feos_core::parameter::Parameters;
 use nalgebra::{DMatrix, DVector, SMatrix, matrix, stack, vector};
 use num_dual::DualNum;
@@ -72,6 +75,7 @@ pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, UVTheoryAssociatio
 #[derive(Debug, Clone)]
 pub struct UVTheoryPars {
     pub perturbation: Perturbation,
+    pub association_model: AssociationModel,
     pub m: DVector<f64>,
     pub rep: DVector<f64>,
     pub att: DVector<f64>,
@@ -86,7 +90,11 @@ pub struct UVTheoryPars {
 }
 
 impl UVTheoryPars {
-    pub fn new(parameters: &UVTheoryParameters, perturbation: Perturbation) -> Self {
+    pub fn new(
+        parameters: &UVTheoryParameters,
+        perturbation: Perturbation,
+        association_model: AssociationModel,
+    ) -> Self {
         let n = parameters.pure.len();
 
         let [m, rep, att, sigma, epsilon_k] =
@@ -121,6 +129,7 @@ impl UVTheoryPars {
 
         Self {
             perturbation,
+            association_model,
             m,
             rep,
             att,
@@ -153,7 +162,7 @@ impl HardSphereProperties for UVTheoryPars {
 
     fn hs_diameter<D: DualNum<f64> + Copy>(&self, temperature: D) -> DVector<D> {
         match self.perturbation {
-            Perturbation::BarkerHenderson => BarkerHenderson::diameter_bh(self, temperature),
+            Perturbation::BarkerHenderson => todo!(), // BarkerHenderson::diameter_bh(self, temperature),
             Perturbation::WeeksChandlerAndersen => {
                 WeeksChandlerAndersen::diameter_wca(self, temperature)
             }
@@ -199,7 +208,11 @@ pub mod utils {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record = UVTheoryRecord::new(m, rep, att, sigma, epsilon);
         let pr = PureRecord::new(identifier, 1.0, model_record);
-        UVTheoryPars::new(&UVTheoryParameters::new_pure(pr).unwrap(), p)
+        UVTheoryPars::new(
+            &UVTheoryParameters::new_pure(pr).unwrap(),
+            p,
+            AssociationModel::TVW,
+        )
     }
 
     pub fn test_parameters_mixture(

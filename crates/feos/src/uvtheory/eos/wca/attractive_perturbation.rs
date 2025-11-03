@@ -280,6 +280,7 @@ fn y_eff<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64) -> 
 mod test {
     use super::*;
     use crate::uvtheory::Perturbation::WeeksChandlerAndersen as WCA;
+    use crate::uvtheory::eos::AssociationModel;
     use crate::uvtheory::parameters::utils::{methane_parameters, test_parameters_mixture};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
@@ -290,7 +291,7 @@ mod test {
         let reduced_temperature = 4.0;
         let reduced_density = 1.0;
 
-        let p = UVTheoryPars::new(&methane_parameters(24.0, 6.0), WCA);
+        let p = UVTheoryPars::new(&methane_parameters(24.0, 6.0), WCA, AssociationModel::TVW);
         let state = StateHD::new(
             reduced_temperature * p.epsilon_k[0],
             p.sigma[0].powi(3) / reduced_density,
@@ -358,6 +359,7 @@ mod test {
                 dvector![1.0, 0.5],
             ),
             WCA,
+            AssociationModel::TVW
         );
         let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &molefracs);
         let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
@@ -423,6 +425,7 @@ mod test {
                 dvector![1.0, 0.5],
             ),
             WCA,
+            AssociationModel::TVW
         );
 
         let state = StateHD::new(reduced_temperature, volume, &molefracs);

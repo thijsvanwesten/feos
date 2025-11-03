@@ -5,7 +5,6 @@ use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
 use std::{f64::consts::PI, fmt};
 
-
 // Coefficients for IWCA from eq. (S55)
 const C_WCA: [[f64; 6]; 6] = [
     [
@@ -139,7 +138,7 @@ impl AttractivePerturbationWCA {
 
                 // Interpolation term
                 let b2pert_ij = prefactor_b2[(i, j)] * delta_b2(t_ij, rep_ij, att_ij, q_ij);
- 
+
                 let psi = D::one() - u_fraction_wca(D::from(rep_ij), rho_st);
 
                 a += psi * (b2pert_ij - b21u_ij) * density;
@@ -148,7 +147,6 @@ impl AttractivePerturbationWCA {
         a * density
     }
 }
-
 
 /// Correlation integral for first-order WCA perturbation term Mie fluids
 fn correlation_integral_wca_noldl<D: DualNum<f64> + Copy>(rho: D, rep: D, att: D, d: D) -> D {
@@ -301,7 +299,7 @@ fn y_eff<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64) -> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::test_parameters_mixture;
+    use crate::uvtheory::{eos::AssociationModel, parameters::utils::test_parameters_mixture};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
 
@@ -320,7 +318,11 @@ mod test {
             dvector![1.0, 2.0],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+        let p = UVTheoryPars::new(
+            &p,
+            crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,
+            AssociationModel::TVW,
+        );
 
         // let p = test_parameters(
         //     1.0,
@@ -354,7 +356,11 @@ mod test {
             dvector![1.0, 2.0],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+        let p = UVTheoryPars::new(
+            &p,
+            crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,
+            AssociationModel::TVW,
+        );
 
         // let p = test_parameters(
         //     1.0,

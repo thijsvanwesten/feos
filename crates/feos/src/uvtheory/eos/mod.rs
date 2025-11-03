@@ -11,8 +11,8 @@ use crate::{
     },
 };
 
-use super::wca_tpt::chain_mie_tpty::{gmie_aroundcontact_mix};
-use super::wca_tpt::hard_sphere_wca::{packing_fraction};
+use super::wca_tpt::chain_mie_tpty::gmie_aroundcontact_mix;
+use super::wca_tpt::hard_sphere_wca::packing_fraction;
 
 use super::parameters::{UVTheoryParameters, UVTheoryPars};
 use feos_core::{Molarweight, ResidualDyn, StateHD, Subset};
@@ -21,8 +21,8 @@ use num_dual::DualNum;
 use quantity::MolarWeight;
 use std::f64::consts::{FRAC_PI_6, PI};
 
-mod bh;
-pub use bh::BarkerHenderson;
+// mod bh;
+// pub use bh::BarkerHenderson;
 mod wca;
 pub use wca::{WeeksChandlerAndersen, WeeksChandlerAndersenB3};
 pub mod wca_tpt;
@@ -75,8 +75,6 @@ const W_K21: [f64; 21] = [
     0.011694638867371874278064396062192,
 ];
 
-
-
 /// Type of Combination Rule.
 #[derive(Debug, Clone)]
 pub enum CombinationRule {
@@ -101,6 +99,12 @@ pub enum ChainContribution {
     TPT1y,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum AssociationModel {
+    TVW,
+    Lafitte,
+}
+
 /// Configuration options for uv-theory
 #[derive(Clone)]
 pub struct UVTheoryOptions {
@@ -108,6 +112,7 @@ pub struct UVTheoryOptions {
     pub perturbation: Perturbation,
     pub combination_rule: CombinationRule,
     pub chain_contribution: ChainContribution,
+    pub association_model: AssociationModel,
     pub max_iter_cross_assoc: usize,
     pub tol_cross_assoc: f64,
 }
@@ -119,6 +124,7 @@ impl Default for UVTheoryOptions {
             perturbation: Perturbation::WeeksChandlerAndersenTPT,
             combination_rule: CombinationRule::OneFluidPsi,
             chain_contribution: ChainContribution::TPT1y,
+            association_model: AssociationModel::TVW,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
         }
@@ -141,7 +147,8 @@ impl UVTheory {
 
     /// uv-theory with provided options.
     pub fn with_options(parameters: UVTheoryParameters, options: UVTheoryOptions) -> Self {
-        let params = UVTheoryPars::new(&parameters, options.perturbation);
+        let params =
+            UVTheoryPars::new(&parameters, options.perturbation, options.association_model);
 
         let association = Association::new(
             &parameters,
@@ -224,7 +231,8 @@ impl ResidualDyn for UVTheory {
     ) -> Vec<(&'static str, D)> {
         match &self.options.perturbation {
             Perturbation::BarkerHenderson => {
-                BarkerHenderson.residual_helmholtz_energy_contributions(&self.params, state)
+                todo!()
+                // BarkerHenderson.residual_helmholtz_energy_contributions(&self.params, state)
             }
             Perturbation::WeeksChandlerAndersen => {
                 WeeksChandlerAndersen.residual_helmholtz_energy_contributions(&self.params, state)
@@ -236,6 +244,104 @@ impl ResidualDyn for UVTheory {
                 self.reduced_helmholtz_energy_density_contributions_wca_tpt(state)
             }
         }
+    }
+}
+
+impl UVTheoryPars {
+    fn association_strength_lafitte<D: DualNum<f64> + Copy>(
+        &self,
+        state: &feos_core::StateHD<D>,
+        diameter: &DVector<D>,
+        comp_i: usize,
+        comp_j: usize,
+        assoc_ij: &UVTheoryAssociationRecord,
+    ) -> D {
+        // auxiliary variables
+        let [zeta2, n3] = self.zeta(state.temperature, &state.partial_density, [2, 3]);
+        let n2 = zeta2 * 6.0;
+        let n3i = (-n3 + 1.0).recip();
+
+        let di = diameter[comp_i];
+        let dj = diameter[comp_j];
+        let k = di * dj / (di + dj) * (n2 * n3i);
+        let g_contact = n3i * (k * (k / 18.0 + 0.5) + 1.0);
+        
+        let d = (di + dj) * 0.5;
+        // temperature dependent association volume
+        // rc and rd are dimensioned in units of Angstrom
+        let rc = assoc_ij.rc_ab;
+        // rd is the distance between an association site and the segment centre.
+        // It is fixed at 0.4 sigma, leading to 0.4 * 0.5 = 0.2 in the combining rule.
+        let rd = (self.sigma[comp_i] + self.sigma[comp_j]) * 0.2;
+        let v = d * d * PI * 4.0 / (72.0 * rd.powi(2))
+            * ((d.recip() * (rc + 2.0 * rd)).ln()
+                * (6.0 * rc.powi(3) + 18.0 * rc.powi(2) * rd - 24.0 * rd.powi(3))
+                + (-d + rc + 2.0 * rd)
+                    * (d.powi(2) + d * rc + 22.0 * rd.powi(2)
+                        - 5.0 * rc * rd
+                        - d * 7.0 * rd
+                        - 8.0 * rc.powi(2)));
+        let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
+        
+        g_contact * f_ab * v
+    }
+
+    fn association_strength_tvw<D: DualNum<f64> + Copy>(
+        &self,
+        state: &feos_core::StateHD<D>,
+        diameter: &DVector<D>,
+        comp_i: usize,
+        comp_j: usize,
+        assoc_ij: &UVTheoryAssociationRecord,
+    ) -> D {
+        let n = diameter.len();
+        let rho_st = (0..n).fold(D::zero(), |z, i| {
+            z + state.partial_density[i] * self.m[i] * self.sigma[i].powi(3)
+        });
+        let sigma_ij = self.sigma[(comp_i, comp_j)];
+        let sigma_ij_inv = 1.0 / sigma_ij;
+        let eta = packing_fraction(&self.m, &state.partial_density, diameter);
+
+        // geometry of SW assocation site: rc and rd are dimensioned in units of Angstrom
+        let rc = assoc_ij.rc_ab;
+        let rd = assoc_ij.rd_ab;
+
+        // 20-point gauss-legendre integration of association integral delta
+        let rmin = 0.8 * sigma_ij;
+        let rmax = 2.0 * rd + rc;
+        let width = (rmax - rmin) * 0.5;
+
+        let two_rd = 2.0 * rd;
+        let fac = width + rmin;
+        let fac1 = two_rd + rc;
+        let fac2 = 2.0 * rc - two_rd;
+
+        let mut i_ab_ij = D::zero();
+
+        for k in 0..21 {
+            let r = width * X_K21[k] + fac;
+            let r_geometry = (fac1 - r).powi(2) * (fac2 + r);
+            let integrand = gmie_aroundcontact_mix(
+                r * sigma_ij_inv,
+                self,
+                eta,
+                &state.partial_density,
+                state.temperature,
+                diameter,
+                &rho_st,
+                comp_i,
+                comp_j,
+            ) * r_geometry
+                * r;
+            i_ab_ij += integrand * width * W_K21[k];
+        }
+        // Notes: improve efficiency by only callling y^hs in integrand? optimize rmin to reduce to n<20-point GL?
+        i_ab_ij = i_ab_ij * 4.0 * PI / (24.0 * rd * rd);
+        let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
+        let delta = i_ab_ij * f_ab;
+
+        // dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
+        delta
     }
 }
 
@@ -288,52 +394,60 @@ impl AssociationStrength for UVTheoryPars {
         comp_j: usize,
         assoc_ij: &Self::Record,
     ) -> D {
-
-        let n = diameter.len();
-        let rho_st = (0..n).fold(D::zero(), |z, i| z + state.partial_density[i] * self.m[i] * self.sigma[i].powi(3));      
-        let sigma_ij = self.sigma[(comp_i,comp_j)];
-        let sigma_ij_inv = 1.0/sigma_ij;
-        let eta = packing_fraction(&self.m, &state.partial_density, diameter);
-
-        // geometry of SW assocation site: rc and rd are dimensioned in units of Angstrom
-        let rc = assoc_ij.rc_ab;
-        let rd = assoc_ij.rd_ab;
-
-        // 20-point gauss-legendre integration of association integral delta 
-        let rmin = 0.8*sigma_ij;
-        let rmax = 2.0*rd + rc;
-        let width = (rmax-rmin)*0.5;
-        
-        let two_rd = 2.0*rd;
-        let fac = width + rmin;
-        let fac1 = two_rd + rc;
-        let fac2 = 2.0*rc - two_rd;
-        
-        let mut i_ab_ij = D::zero();
-
-        for k in 0..21 {
-            let r = width * X_K21[k] + fac;            
-            let r_geometry = (fac1 - r).powi(2)*(fac2 + r); 
-            let integrand = gmie_aroundcontact_mix(
-                r*sigma_ij_inv, 
-                self, 
-                eta, 
-                &state.partial_density, 
-                state.temperature, 
-                diameter, 
-                &rho_st, 
-                comp_i, 
-                comp_j
-            ) * r_geometry *r;
-            i_ab_ij += integrand * width * W_K21[k]; 
+        match self.association_model {
+            AssociationModel::Lafitte => {
+                self.association_strength_lafitte(state, diameter, comp_i, comp_j, assoc_ij)
+            }
+            AssociationModel::TVW => {
+                self.association_strength_tvw(state, diameter, comp_i, comp_j, assoc_ij)
+            }
         }
-        // Notes: improve efficiency by only callling y^hs in integrand? optimize rmin to reduce to n<20-point GL?
-        i_ab_ij = i_ab_ij * 4.0*PI / (24.0*rd*rd);
-        let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
-        let delta = i_ab_ij * f_ab;
 
-        dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
-        delta        
+        // let n = diameter.len();
+        // let rho_st = (0..n).fold(D::zero(), |z, i| z + state.partial_density[i] * self.m[i] * self.sigma[i].powi(3));
+        // let sigma_ij = self.sigma[(comp_i,comp_j)];
+        // let sigma_ij_inv = 1.0/sigma_ij;
+        // let eta = packing_fraction(&self.m, &state.partial_density, diameter);
+
+        // // geometry of SW assocation site: rc and rd are dimensioned in units of Angstrom
+        // let rc = assoc_ij.rc_ab;
+        // let rd = assoc_ij.rd_ab;
+
+        // // 20-point gauss-legendre integration of association integral delta
+        // let rmin = 0.8*sigma_ij;
+        // let rmax = 2.0*rd + rc;
+        // let width = (rmax-rmin)*0.5;
+
+        // let two_rd = 2.0*rd;
+        // let fac = width + rmin;
+        // let fac1 = two_rd + rc;
+        // let fac2 = 2.0*rc - two_rd;
+
+        // let mut i_ab_ij = D::zero();
+
+        // for k in 0..21 {
+        //     let r = width * X_K21[k] + fac;
+        //     let r_geometry = (fac1 - r).powi(2)*(fac2 + r);
+        //     let integrand = gmie_aroundcontact_mix(
+        //         r*sigma_ij_inv,
+        //         self,
+        //         eta,
+        //         &state.partial_density,
+        //         state.temperature,
+        //         diameter,
+        //         &rho_st,
+        //         comp_i,
+        //         comp_j
+        //     ) * r_geometry *r;
+        //     i_ab_ij += integrand * width * W_K21[k];
+        // }
+        // // Notes: improve efficiency by only callling y^hs in integrand? optimize rmin to reduce to n<20-point GL?
+        // i_ab_ij = i_ab_ij * 4.0*PI / (24.0*rd*rd);
+        // let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
+        // let delta = i_ab_ij * f_ab;
+
+        // // dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
+        // delta
     }
 
     fn combining_rule(
@@ -405,6 +519,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             combination_rule: CombinationRule::OneFluidPsi,
             chain_contribution: ChainContribution::TPT1y,
+            association_model: AssociationModel::TVW,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
         };
@@ -435,6 +550,7 @@ mod test {
             perturbation: Perturbation::WeeksChandlerAndersenB3,
             combination_rule: CombinationRule::OneFluidPsi,
             chain_contribution: ChainContribution::TPT1y,
+            association_model: AssociationModel::TVW,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
         };
@@ -488,6 +604,7 @@ mod test {
             perturbation: Perturbation::BarkerHenderson,
             combination_rule: CombinationRule::OneFluidPsi,
             chain_contribution: ChainContribution::TPT1y,
+            association_model: AssociationModel::TVW,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
         };
@@ -510,7 +627,11 @@ mod test {
             dvector![1.0, 1.0],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&parameters, Perturbation::WeeksChandlerAndersen);
+        let p = UVTheoryPars::new(
+            &parameters,
+            Perturbation::WeeksChandlerAndersen,
+            AssociationModel::TVW,
+        );
 
         // state
         let reduced_temperature = 1.0;
@@ -539,7 +660,11 @@ mod test {
             dvector![1.0, 2.0],
             dvector![1.0, 0.5],
         );
-        let p = UVTheoryPars::new(&parameters, Perturbation::WeeksChandlerAndersen);
+        let p = UVTheoryPars::new(
+            &parameters,
+            Perturbation::WeeksChandlerAndersen,
+            AssociationModel::TVW,
+        );
 
         // state
         let reduced_temperature = 1.5;
@@ -569,6 +694,7 @@ mod test {
             perturbation: Perturbation::WeeksChandlerAndersenTPT,
             combination_rule: CombinationRule::OneFluidPsi,
             chain_contribution: ChainContribution::TPT1y,
+            association_model: AssociationModel::TVW,
             max_iter_cross_assoc: 50,
             tol_cross_assoc: 1e-10,
         };

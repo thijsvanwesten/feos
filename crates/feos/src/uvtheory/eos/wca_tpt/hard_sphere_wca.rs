@@ -203,7 +203,7 @@ pub(super) fn packing_fraction_a_ij<D: DualNum<f64> + Copy>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::uvtheory::parameters::utils::{test_parameters, test_parameters_mixture};
+    use crate::uvtheory::{eos::AssociationModel, parameters::utils::{test_parameters, test_parameters_mixture}};
     use approx::assert_relative_eq;
     use nalgebra::dvector;
 
@@ -267,7 +267,7 @@ mod test {
             dvector![1.0, 0.5],
         );
         let parameters =
-            UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT);
+            UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT, AssociationModel::TVW);
 
         let pt = HardSphereWCA;
         let state = StateHD::new(reduced_temperature, reduced_volume, &moles.clone());
