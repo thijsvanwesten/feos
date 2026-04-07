@@ -4,6 +4,7 @@ use super::hard_sphere_wca::{
 };
 use crate::uvtheory::eos::ChainContribution;
 use crate::uvtheory::parameters::*;
+use crate::uvtheory::wca_tpt::attractive_perturbation_wca::one_fluid_properties;
 use feos_core::StateHD;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
@@ -102,26 +103,11 @@ impl ChainMie {
                 i, 
                 i);
 
-            let t_st = state.temperature / p.epsilon_k[i];
-            let nu_inv = (p.rep[i]).recip();
-
-            // // move PAR to constant, see top of file
-            // let c1 = D::one() * (PAR[0] + PAR[1] * nu_inv + PAR[2] * nu_inv2)
-            //     + t_st.recip() * (PAR[3] + PAR[4] * nu_inv + PAR[5] * nu_inv2);
-            // let c2 = D::one() * (PAR[6] + PAR[7] * nu_inv + PAR[8] * nu_inv2)
-            //     + t_st.recip() * (PAR[9] + PAR[10] * nu_inv + PAR[11] * nu_inv2);
-            // let aa = (PAR[14] + PAR[15] * nu_inv).abs();
-            // let bb = PAR[16] * nu_inv + PAR[17] * nu_inv2 + PAR[18] * nu_inv.powi(3);
-            // let c3 = (D::one() + t_st).ln() * bb + aa;
-
-            // let prefactor = D::one() + (-c3 * rho_st).exp() * (PAR[12] + PAR[13] * nu_inv);
-            // let phiu = prefactor * (c1 * rho_st + c2 * rho_st * rho_st).tanh();
-
-            // let y_sigma = y_wca_sigma * (D::one() + phiu * ((-t_st.recip()).exp() - 1.0));
-
             // Helmholtz energy
             a -= x[i] * (m[i] - 1.0) * y_sigma.ln();
 
+            let t_st = state.temperature / p.epsilon_k[i];
+            let nu_inv = (p.rep[i]).recip();
             //-----------------
             // TPT1-y (homo-segmented)
             //-----------------
@@ -167,11 +153,7 @@ impl ChainMie {
 
                 // Helmholtz energy contribution
                 a -= x[i] * (m[i] - 2.0) * bfac_st.powf(1.5) * fac3 * ynn_wca.ln();
-                a -= x[i]
-                    * (m[i] - 2.0)
-                    * bfac_st.powf(1.5)
-                    * ((p.m[i] - 2.0) / (p.m[i] - 1.0))
-                    * ynn_att.ln();
+                a -= x[i] * (m[i] - 2.0) * bfac_st.powf(1.5) * ((p.m[i] - 2.0) / (p.m[i] - 1.0)) * ynn_att.ln();
             }
         }
         density * a
@@ -192,7 +174,7 @@ pub fn gmie_aroundcontact_mix<D: DualNum<f64> + Copy>(
 ) -> D {
 
     // CCF WCA fluid (MF1 theory)
-    let y_wca_sigma = y_wca_aroundcontact_mix(
+    let y_wca_rst = y_wca_aroundcontact_mix(
         r_st,
         p,
         eta,
@@ -201,11 +183,13 @@ pub fn gmie_aroundcontact_mix<D: DualNum<f64> + Copy>(
         dhs,
         i,
         j,
-    );       
+    ); // use pure fluid equation with t_x, rho_st?
     
     // CCF Mie fluid (uf-theory)
-    let t_st = temperature / p.eps_k_ij[(i, j)];
-    let nu_inv = 1.0/p.rep_ij[(i,j)];
+    let t_st = temperature / p.eps_k_ij[(i, j)]; // use eps_x??
+    let rep = p.rep_ij[(i,j)];
+    let att = p.att_ij[(i,j)];
+    let nu_inv = 1.0/rep;
     let nu_inv2 = nu_inv * nu_inv;
 
     // move PAR to constant, see top of file
@@ -220,7 +204,40 @@ pub fn gmie_aroundcontact_mix<D: DualNum<f64> + Copy>(
     let prefactor = D::one() + (-c3 * rho_st).exp() * (PAR[12] + PAR[13] * nu_inv);
     let phiu = prefactor * (c1 * rho_st + c2 * rho_st * rho_st).tanh();
 
-    y_wca_sigma * (D::one() + phiu * ((-t_st.recip()).exp() - 1.0))
+    if (r_st-1.0).abs() < 1e-14 {
+        y_wca_rst * (D::one() + phiu * (( -t_st.recip() ).exp() - 1.0))
+    }
+    else {
+        let cmie = (rep/(rep-att))*(rep/att).powf(att/(rep-att));
+        let e0 = if r_st <= (rep/att).powf(1.0/(rep-att)) {
+            ( -t_st.recip() * ( cmie * ( r_st.powf(-rep) - r_st.powf(-att) ) + 1.0 ) ).exp()
+        }
+        else {
+            D::one()
+        };
+        let emie = (-t_st.recip() * cmie * ( r_st.powf(-rep) - r_st.powf(-att) ) ).exp();
+        y_wca_rst * ( phiu * e0 + (D::one() - phiu) * emie)
+    }
+    
+    // let gmie = y_wca_rst * (D::one() + phiu * (( -t_st.recip() ).exp() - 1.0));
+    // dbg!(rho_st, r_st, e0, emie, y_wca_rst, gmie);
+
+    // y_wca_rst * ( phiu * e0 + (D::one() - phiu) * emie)
+}
+
+// CCF of a pure HS fluid at reduced distance x=r/dhs according to HF model of Ben-Amotz.
+fn y_hf_pure<D: DualNum<f64> + Copy>(
+    x: D,
+    eta: D
+) -> D {
+    let etamin = (-eta + 1.0).recip();
+    let etamin3 = etamin.powi(3);
+    let aa = (-eta + 3.0)*etamin3 - 3.0;
+    let bb = -eta*3.0*(-eta + 2.0)*etamin3;
+    let cc = ( (-eta+2.0) *etamin3 *0.5 ).ln() - 
+            eta*(-eta*6.0 + 2.0 + eta*eta*3.0)*etamin3;      
+    
+    ( aa + bb*x + cc*x.powi(3) ).exp()
 }
 
 // CCF of two WCA monomers of index i and j in a WCA fluid mixture at reduced distance r/sigma.
@@ -235,6 +252,8 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     i: usize,
     j: usize,
 ) -> D {
+
+    // Molecular parameters for pair i-j
     let mseg = &p.m;
     let rep = p.rep_ij[(i, j)];
     let att = p.att_ij[(i, j)];
@@ -242,16 +261,25 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
     let t_st = temperature / p.eps_k_ij[(i, j)];
     let d_hs = (dhs[i] + dhs[j]) * 0.5;
 
-    let yhs_r = y_hf(
-        &partial_density,
-        &mseg,
-        &dhs,
-        i,
-        j,
-        d_hs.recip() * r_st * sigma,
-    );
-    let yhs_d = y_hf(&partial_density, &mseg, &dhs, i, j, D::one());
-
+    // CCF of hard spheres
+    let mut l_pure = true;    
+    if mseg.len() > 1 {
+        l_pure = false
+    }
+    let yhs_r = if l_pure {
+        y_hf_pure(d_hs.recip() * r_st * sigma, eta)
+    } 
+    else {
+        y_hf(&partial_density, &mseg,&dhs,i,j,d_hs.recip() * r_st * sigma )
+    };
+    let yhs_d = if l_pure {
+        y_hf_pure(D::one(), eta)
+    } 
+    else {
+        y_hf(&partial_density, &mseg, &dhs, i, j, D::one())
+    };    
+    
+    // Dimensionless quantities
     let d_st = d_hs / sigma;
     let d_st_3 = d_st.powi(3);
     let q_st_3 = dimensionless_diameter_q_wca(t_st, D::one() * rep, D::one() * att).powi(3);
@@ -287,6 +315,7 @@ fn y_wca_aroundcontact_mix<D: DualNum<f64> + Copy>(
 
     // First-order Mayer-f perturbation expansion ln(y0(r)) about ln(y^HS_d(r))
     yhs_r * (y01 / yhs_d).exp()
+    
 }
 
 // Effective packing fraction specific to CCF of WCA fluid around contact
@@ -296,6 +325,7 @@ fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(dhs_st: D, rmin_st: f64, rep: f
     let rep_inv = 1.0 / rep;
     let rep_inv2 = rep_inv * rep_inv;
 
+    // Parameterization Mol Phys paper (van westen 2025)
     let para_ic = [
         -2.43121181e-01,
         -4.42246830e+00,
@@ -333,6 +363,32 @@ fn packing_fraction_c_ij<D: DualNum<f64> + Copy>(dhs_st: D, rmin_st: f64, rep: f
         + tau.powi(2) * (para_ic[14] + para_ic[15] * rep_inv + para_ic[23] * rep_inv2);
 
     eta + eta * c1 + eta.powi(2) * c2 + eta.powi(3) * c3 + eta.powi(4) * c4
+
+    // //--------------------------------------------
+    // // improved parameterization that does not lead to eta_eff>1
+    // // AAD / % : 0.0568282750928396
+    // // MAD / % : 0.834449036708692
+    // //--------------------------------------------
+    // let para_ic = [5.47746,-8.9675,5.77164,-9.02787,16.8451,-9.96569,
+    // 4.36628,7.20443,-5.0795,-0.62629,-31.1627,20.9922,-40.1456,-11.7723,
+    // 11.2831,48.4406,75.9445,-57.0054,71.2236,2.24076,-13.8551,-81.7684,
+    // -120.229,110.755,-0.233484,0.325517,-0.0539648,4.43099,-5.20858,2.65688]
+
+    // Mmie = alphameanfield( nu, 6, 1 )
+    // C1 = ((para_Ic[0] + para_Ic[1]/Mmie + para_Ic[2]/Mmie**2)*tau  + 
+    //       (para_Ic[3] + para_Ic[4]/Mmie + para_Ic[5]/Mmie**2)*tau**2)
+    // C2 = ((para_Ic[6] + para_Ic[7]/Mmie + para_Ic[8]/Mmie**2)*tau  + 
+    //       (para_Ic[9] + para_Ic[10]/Mmie + para_Ic[11]/Mmie**2)*tau**2)
+    // C3 = ((para_Ic[12] + para_Ic[13]/Mmie + para_Ic[14]/Mmie**2)*tau  + 
+    //       (para_Ic[15] + para_Ic[16]/Mmie + para_Ic[17]/Mmie**2)*tau**2)
+    // C4 = ((para_Ic[18] + para_Ic[19]/Mmie + para_Ic[20]/Mmie**2)*tau  + 
+    //       (para_Ic[21] + para_Ic[22]/Mmie + para_Ic[23]/Mmie**2)*tau**2)
+    // C5 = ((para_Ic[24] + para_Ic[25]/Mmie + para_Ic[26]/Mmie**2)*tau  + 
+    //       (para_Ic[27] + para_Ic[28]/Mmie + para_Ic[29]/Mmie**2)*tau**2)
+    // P = C1 + C2*eta + C3*eta**2 + C4*eta**3
+    // eta_eff = eta * np.tanh(P)**C5
+
+
 }
 
 /// HF model for hard-sphere cavity function y(xx) of two hard spheres
@@ -506,143 +562,158 @@ mod test {
     use approx::assert_relative_eq;
     use nalgebra::dvector;
 
-    /*
-    #[test]
-    fn test_y_wca_aroundcontact_mixture() {
-        let moles = dvector![0.6, 0.4]) * 2.0;
+    // /*
+    // #[test]
+    // fn test_y_wca_aroundcontact_mixture() {
+    //     let moles = dvector![0.6, 0.4]) * 2.0;
 
-        let reduced_temperature = 2.0;
-        let reduced_density = 0.1;
-        let reduced_volume = moles.sum() / reduced_density;
+    //     let reduced_temperature = 2.0;
+    //     let reduced_density = 0.1;
+    //     let reduced_volume = moles.sum() / reduced_density;
 
-        let p = UVTheoryPars::new_binary(
-            vec![
-                PureRecord::new(
-                    Identifier::default(),
-                    1.0,
-                    UVRecord::new(
-                        1.0, 12.0, 6.0, 1.25, 1.0, None, None, None, None, None, None, None,
-                    ),
-                ),
-                PureRecord::new(
-                    Identifier::default(),
-                    1.0,
-                    UVRecord::new(
-                        1.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None, None, None,
-                    ),
-                ),
-            ],
-            None,
-        )
-        .unwrap();
+    //     let p = UVTheoryPars::new_binary(
+    //         vec![
+    //             PureRecord::new(
+    //                 Identifier::default(),
+    //                 1.0,
+    //                 UVRecord::new(
+    //                     1.0, 12.0, 6.0, 1.25, 1.0, None, None, None, None, None, None, None,
+    //                 ),
+    //             ),
+    //             PureRecord::new(
+    //                 Identifier::default(),
+    //                 1.0,
+    //                 UVRecord::new(
+    //                     1.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None, None, None,
+    //                 ),
+    //             ),
+    //         ],
+    //         None,
+    //     )
+    //     .unwrap();
 
-        let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
+    //     let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
 
-        let d = diameter_wca(&p, state.temperature);
-        let eta = packing_fraction(&p.m, &state.partial_density, &d);
+    //     let d = diameter_wca(&p, state.temperature);
+    //     let eta = packing_fraction(&p.m, &state.partial_density, &d);
 
-        let y_wca_00 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            0,
-            0
-        );
-        let y_wca_01 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            0,
-            1
-        );
-        let y_wca_11 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            1,
-            1
-        );
+    //     let y_wca_00 = y_wca_aroundcontact_mix(
+    //         1.0,
+    //         &p,
+    //         eta,
+    //         &state.partial_density,
+    //         state.temperature,
+    //         &d,
+    //         0,
+    //         0
+    //     );
+    //     let y_wca_01 = y_wca_aroundcontact_mix(
+    //         1.0,
+    //         &p,
+    //         eta,
+    //         &state.partial_density,
+    //         state.temperature,
+    //         &d,
+    //         0,
+    //         1
+    //     );
+    //     let y_wca_11 = y_wca_aroundcontact_mix(
+    //         1.0,
+    //         &p,
+    //         eta,
+    //         &state.partial_density,
+    //         state.temperature,
+    //         &d,
+    //         1,
+    //         1
+    //     );
 
-        assert_eq!((y_wca_00, y_wca_01, y_wca_11), (1.2333573033407719,1.2202426938494642, 1.2097785725071151));
-    }
+    //     assert_eq!((y_wca_00, y_wca_01, y_wca_11), (1.2333573033407719,1.2202426938494642, 1.2097785725071151));
+    // }
+
+    // #[test]
+    // fn test_gmie_aroundcontact_mixture() {
+    //     let molefracs = dvector![0.6, 0.4];
+
+    //     let reduced_temperature = 2.0;
+    //     let reduced_density = 0.1;
+    //     let reduced_volume = 1.0 / reduced_density;
+
+    //     let p = test_parameters_mixture(
+    //         dvector![1.0, 2.0],
+    //         dvector![12.0, 12.0],
+    //         dvector![6.0, 6.0],
+    //         dvector![1.25, 1.0],
+    //         dvector![1.0, 1.5],
+    //     );
+    //     // let p = test_parameters_mixture(
+    //     //     dvector![1.0, 1.0],
+    //     //     dvector![12.0, 12.0],
+    //     //     dvector![6.0, 6.0],
+    //     //     dvector![1.0, 1.0],
+    //     //     dvector![1.0, 1.0],
+    //     // );
+    //     let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,AssociationModel::TVW);
+
+    //     let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);       
+
+    //     let d = diameter_wca(&p, state.temperature);
+    //     let eta = packing_fraction(&p.m, &state.partial_density, &d);
+
+
+    //     let x = state.molefracs;
+    //     let density = state.partial_density.sum();
+    //     let rho_st = density * (0..d.len()).fold(0.0, |z, i| z + x[i] * p.m[i] * p.sigma[i].powi(3));        
+        
+    //     let y_wca_00 = gmie_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d, &rho_st, 0, 0); 
+    //     let y_wca_01 = gmie_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d, &rho_st, 0, 1); 
+    //     let y_wca_11 = gmie_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d, &rho_st, 1, 1); 
+    //     assert_relative_eq!(y_wca_00, 1.3165641196539490, epsilon=1e-9);
+    //     assert_relative_eq!(y_wca_01, 1.3050790505787109, epsilon=1e-9);
+    //     assert_relative_eq!(y_wca_11, 1.2938262092789194, epsilon=1e-9);
+    //     // assert_relative_eq!(y_wca_00, 1.1709397329447004, epsilon=1e-9);
+    //     // assert_relative_eq!(y_wca_01, 1.1808360388237535, epsilon=1e-9);
+    //     // assert_relative_eq!(y_wca_11, 1.1881410485453159, epsilon=1e-9);        
+    // }
 
     #[test]
     fn test_y_wca_aroundcontact_mixture2() {
-        let moles = dvector![0.6, 0.4]) * 2.0;
+        let molefracs = dvector![0.6, 0.4];
 
         let reduced_temperature = 2.0;
         let reduced_density = 0.1;
-        let reduced_volume = moles.sum() / reduced_density;
+        let reduced_volume = 1.0 / reduced_density;
 
-        let p = UVTheoryPars::new_binary(
-            vec![
-                PureRecord::new(
-                    Identifier::default(),
-                    1.0,
-                    UVRecord::new(
-                        1.0, 12.0, 6.0, 1.25, 1.0, None, None, None, None, None, None, None,
-                    ),
-                ),
-                PureRecord::new(
-                    Identifier::default(),
-                    1.0,
-                    UVRecord::new(
-                        2.0, 12.0, 6.0, 1.0, 1.5, None, None, None, None, None, None, None,
-                    ),
-                ),
-            ],
-            None,
-        )
-        .unwrap();
+        let p = test_parameters_mixture(
+            dvector![1.0, 2.0],
+            dvector![12.0, 12.0],
+            dvector![6.0, 6.0],
+            dvector![1.25, 1.0],
+            dvector![1.0, 1.5],
+        );
+        let p = UVTheoryPars::new(&p, crate::uvtheory::Perturbation::WeeksChandlerAndersenTPT,AssociationModel::TVW);
 
-        let state = StateHD::new(reduced_temperature, reduced_volume, moles.clone());
+        let state = StateHD::new(reduced_temperature, reduced_volume, &molefracs);       
 
         let d = diameter_wca(&p, state.temperature);
         let eta = packing_fraction(&p.m, &state.partial_density, &d);
 
-        let y_wca_00 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            0,
-            0
-        );
-        let y_wca_01 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            0,
-            1
-        );
-        let y_wca_11 = y_wca_aroundcontact_mix(
-            1.0,
-            &p,
-            eta,
-            &state.partial_density,
-            state.temperature,
-            &d,
-            1,
-            1
-        );
+        // let y_wca_00 = y_wca_aroundcontact_mix(1.0, &p, eta, &state.partial_density, state.temperature, &d,0,0);
+        // let y_wca_01 = y_wca_aroundcontact_mix(1.0, &p, eta, &state.partial_density, state.temperature, &d,0,1);
+        // let y_wca_11 = y_wca_aroundcontact_mix(1.0, &p, eta, &state.partial_density, state.temperature, &d,1,1);
+        // assert_relative_eq!(y_wca_00, 1.3165641196539490, epsilon=1e-9);
+        // assert_relative_eq!(y_wca_01, 1.3050790505787109, epsilon=1e-9);
+        // assert_relative_eq!(y_wca_11, 1.2938262092789194, epsilon=1e-9);
 
-        assert_eq!((y_wca_00, y_wca_01, y_wca_11), (1.3165641196539490,1.3050790505787109,1.2938262092789194));
+        let y_wca_00 = y_wca_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d,0,0);
+        let y_wca_01 = y_wca_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d,0,1);
+        let y_wca_11 = y_wca_aroundcontact_mix(1.2, &p, eta, &state.partial_density, state.temperature, &d,1,1);
+        assert_relative_eq!(y_wca_00, 1.1709397329447004, epsilon=1e-9);
+        assert_relative_eq!(y_wca_01, 1.1808360388237535, epsilon=1e-9);
+        assert_relative_eq!(y_wca_11, 1.1881410485453159, epsilon=1e-9);
+
     }
-     */
+    //  */
 
     /*
     #[test]

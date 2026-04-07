@@ -3,7 +3,7 @@ use crate::uvtheory::parameters::*;
 use feos_core::StateHD;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
-use std::{f64::consts::PI, fmt};
+use std::{alloc::handle_alloc_error, f64::consts::PI, fmt};
 
 // Coefficients for IWCA from eq. (S55)
 const C_WCA: [[f64; 6]; 6] = [
@@ -83,7 +83,7 @@ impl AttractivePerturbationWCA {
         state: &StateHD<D>,
     ) -> D {
         // Exact b21u? or based on vdws one-fluid temperature? Tests are based on vdws one-fluid...
-        let exact_b21u = false;
+        let exact_b21u = false; //true;
 
         // Parameters and state
         let p = &parameters;
@@ -108,6 +108,8 @@ impl AttractivePerturbationWCA {
         let t_x = state.temperature / epsilon_vdw1f; // VdW-1f temperature
         let rho_st = density * m_mix * sigma_x.powi(3); // dimensionless mixture density
 
+        // let d = diameter_wca(p, state.temperature);
+
         // Helmholtz energy
         let mut a = D::zero();
         for i in 0..n {
@@ -122,9 +124,10 @@ impl AttractivePerturbationWCA {
                 let pref = prefactor_a1u[(i, j)] / t;
 
                 // Perturbation term without its second-virial contribution...
+                // let d_ij = (d[i]+d[j])*0.5;
                 a += pref
                     * density
-                    * correlation_integral_wca_noldl(rho_st, D::from(rep_ij), D::from(att_ij), d_x);
+                    * correlation_integral_wca_noldl(rho_st, D::from(rep_ij), D::from(att_ij), d_x); //d_ij
 
                 // ...and its second-virial contribution
                 let b21u_ij = pref

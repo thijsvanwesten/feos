@@ -333,6 +333,8 @@ impl UVTheoryPars {
                 comp_j,
             ) * r_geometry
                 * r;
+
+            
             i_ab_ij += integrand * width * W_K21[k];
         }
         // Notes: improve efficiency by only callling y^hs in integrand? optimize rmin to reduce to n<20-point GL?
@@ -340,6 +342,7 @@ impl UVTheoryPars {
         let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1();
         let delta = i_ab_ij * f_ab;
 
+        // dbg!(state.partial_density.sum(), state.temperature, delta, f_ab, i_ab_ij, eta);
         // dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
         delta
     }
