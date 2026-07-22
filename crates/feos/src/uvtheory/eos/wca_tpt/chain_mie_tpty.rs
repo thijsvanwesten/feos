@@ -4,7 +4,7 @@ use super::hard_sphere_wca::{
 };
 use crate::uvtheory::eos::ChainContribution;
 use crate::uvtheory::parameters::*;
-use crate::uvtheory::wca_tpt::attractive_perturbation_wca::one_fluid_properties;
+// use crate::uvtheory::wca_tpt::attractive_perturbation_wca::one_fluid_properties;
 use feos_core::StateHD;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
@@ -79,18 +79,6 @@ impl ChainMie {
             // TPT1
             //-----------------
 
-            // // CCF WCA fluid (MF1 theory)
-            // let y_wca_sigma = y_wca_aroundcontact_mix(
-            //     1.0,
-            //     &p,
-            //     eta,
-            //     &state.partial_density,
-            //     state.temperature,
-            //     &d,
-            //     i,
-            //     i,
-            // );
-
             // CCF Mie fluid (uf-theory)
             let y_sigma = gmie_aroundcontact_mix(
                 1.0, 
@@ -108,6 +96,7 @@ impl ChainMie {
 
             let t_st = state.temperature / p.epsilon_k[i];
             let nu_inv = (p.rep[i]).recip();
+
             //-----------------
             // TPT1-y (homo-segmented)
             //-----------------

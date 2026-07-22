@@ -58,6 +58,7 @@ impl PyEquationOfState {
             "WCA" => Perturbation::WeeksChandlerAndersen,
             "WCA_B3" => Perturbation::WeeksChandlerAndersenB3,
             "WCA_TPT" => Perturbation::WeeksChandlerAndersenTPT,
+            "UFWCA_TPT" => Perturbation::WeeksChandlerAndersenTPTuf,
             _ => {
                 return Err(PyErr::new::<PyValueError, _>(
                     r#"perturbation must be "BH", "WCA", "WCA_B3" or "WCA_TPT""#.to_string(),

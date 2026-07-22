@@ -8,11 +8,19 @@ use crate::{
             attractive_perturbation_wca::AttractivePerturbationWCA, chain_mie_tpty::ChainMie,
             hard_sphere_wca::HardSphereWCA, reference_perturbation_wca::ReferencePerturbationWCA,
         },
+        ufwca_tpt::{
+            attractive_perturbation_wca::AttractivePerturbationWCAuf, chain_mie_tpty::ChainMieuf,
+            hard_sphere_wca::HardSphereWCAuf, reference_perturbation_wca::ReferencePerturbationWCAuf,
+        },
     },
 };
 
-use super::wca_tpt::chain_mie_tpty::gmie_aroundcontact_mix;
-use super::wca_tpt::hard_sphere_wca::packing_fraction;
+
+// use super::wca_tpt::chain_mie_tpty::gmie_aroundcontact_mix;
+// use super::wca_tpt::hard_sphere_wca::{packing_fraction};
+use super::ufwca_tpt::chain_mie_tpty::gmie_aroundcontact_mix;
+use super::ufwca_tpt::hard_sphere_wca::{packing_fraction, packing_fraction_a_ij};
+// use crate::uvtheory::ufwca_tpt::hard_sphere_wca::{packing_fraction};
 
 use super::parameters::{UVTheoryParameters, UVTheoryPars};
 use feos_core::{Molarweight, ResidualDyn, StateHD, Subset};
@@ -26,6 +34,7 @@ use std::f64::consts::{FRAC_PI_6, PI};
 mod wca;
 pub use wca::{WeeksChandlerAndersen, WeeksChandlerAndersenB3};
 pub mod wca_tpt;
+pub mod ufwca_tpt;
 
 const X_K21: [f64; 21] = [
     -0.995657163025808080735527280689003,
@@ -91,6 +100,7 @@ pub enum Perturbation {
     WeeksChandlerAndersen,
     WeeksChandlerAndersenB3,
     WeeksChandlerAndersenTPT,
+    WeeksChandlerAndersenTPTuf,
 }
 
 #[derive(Clone)]
@@ -204,6 +214,46 @@ impl UVTheory {
         }
         contributions
     }
+
+    pub fn reduced_helmholtz_energy_density_contributions_uf_wca_tpt<D: DualNum<f64> + Copy>(
+        &self,
+        state: &StateHD<D>,
+    ) -> Vec<(&'static str, D)> {
+        let mut contributions = vec![
+            (
+                "Hard Sphere (WCA, TPT)",
+                HardSphereWCAuf.helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Mie Chain",
+                ChainMieuf {
+                    chain_contribution: self.options.chain_contribution.clone(),
+                }
+                .helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Reference Perturbation (WCA)",
+                ReferencePerturbationWCAuf.helmholtz_energy_density(&self.params, state),
+            ),
+            (
+                "Attractive Perturbation (WCA)",
+                AttractivePerturbationWCAuf.helmholtz_energy_density(&self.params, state),
+            ),
+        ];
+        if let Some(association) = self.association.as_ref() {
+            let d = self.params.hs_diameter(state.temperature);
+            contributions.push((
+                "Association",
+                association.helmholtz_energy_density(
+                    &self.params,
+                    &self.parameters.association,
+                    state,
+                    &d,
+                ),
+            ))
+        }
+        contributions
+    }
 }
 
 impl Subset for UVTheory {
@@ -242,6 +292,9 @@ impl ResidualDyn for UVTheory {
             }
             Perturbation::WeeksChandlerAndersenTPT => {
                 self.reduced_helmholtz_energy_density_contributions_wca_tpt(state)
+            }
+            Perturbation::WeeksChandlerAndersenTPTuf => {
+                self.reduced_helmholtz_energy_density_contributions_uf_wca_tpt(state)
             }
         }
     }
@@ -346,6 +399,58 @@ impl UVTheoryPars {
         // dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
         delta
     }
+
+    // fn association_strength_conical<D: DualNum<f64> + Copy>(
+    //     &self,
+    //     state: &feos_core::StateHD<D>,
+    //     diameter: &DVector<D>,
+    //     comp_i: usize,
+    //     comp_j: usize,
+    //     assoc_ij: &UVTheoryAssociationRecord,
+    // ) -> D {
+    //     let n = diameter.len();
+    //     let rho_st = (0..n).fold(D::zero(), |z, i| {
+    //         z + state.partial_density[i] * self.m[i] * self.sigma[i].powi(3)
+    //     });
+    //     let sigma_ij = self.sigma[(comp_i, comp_j)];
+    //     let sigma_ij_inv = 1.0 / sigma_ij;
+    //     let eta = packing_fraction(&self.m, &state.partial_density, diameter);
+
+    //     // geometry of conical assocation site: rc dimensioned in units of Angstrom, theta is maximum angle in radians
+    //     let r_c = assoc_ij.rc_ab;
+    //     let theta_c = assoc_ij.rd_ab;
+
+    //     let d_ij = (diameter[comp_i]+diameter[comp_j]) * 0.5;
+    //     let k_ab = d_ij.powi(3) * (1.0 - (theta_c).cos()) * (1.0 - (theta_c).cos()) * 0.25; // for mixtures: theta_c,i and theta_c,j
+    //     let f_ab = (state.temperature.recip() * assoc_ij.epsilon_k_ab).exp_m1(); 
+
+    //     let eta_a = packing_fraction_a_ij(dhs_st, rs_st, rep, eta);
+    //     // let yhs_d = 
+                      
+    //     // let mut i_ab_ij = D::zero();
+
+
+
+    //     // let integrand = gmie_aroundcontact_mix(
+    //     //     r * sigma_ij_inv,
+    //     //     self,
+    //     //     eta,
+    //     //     &state.partial_density,
+    //     //     state.temperature,
+    //     //     diameter,
+    //     //     &rho_st,
+    //     //     comp_i,
+    //     //     comp_j,
+    //     // )
+
+    //     let delta = i_ab_ij * k_ab * f_ab * 4.0*PI;
+
+    //     // dbg!(state.partial_density.sum(), state.temperature, delta, f_ab, i_ab_ij, eta);
+    //     // dbg!(rc, rd, rmin, rmax, sigma_ij, &state.partial_density, state.temperature, rho_st, width,i_ab_ij, f_ab, delta);
+    //     delta
+
+    // }
+
 }
 
 impl AssociationStrength for UVTheoryPars {

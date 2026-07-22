@@ -172,6 +172,9 @@ impl HardSphereProperties for UVTheoryPars {
             Perturbation::WeeksChandlerAndersenTPT => {
                 super::wca_tpt::hard_sphere_wca::diameter_wca(self, temperature)
             }
+            Perturbation::WeeksChandlerAndersenTPTuf => {
+                super::ufwca_tpt::hard_sphere_wca::diameter_wca(self, temperature)
+            }
         }
     }
 }

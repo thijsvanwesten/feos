@@ -57,6 +57,7 @@ mod eos;
 mod parameters;
 
 pub use eos::wca_tpt;
+pub use eos::ufwca_tpt;
 pub use eos::{
     ChainContribution, CombinationRule, Perturbation, UVTheory, UVTheoryOptions,
     WeeksChandlerAndersen, WeeksChandlerAndersenB3, AssociationModel
